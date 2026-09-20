@@ -592,6 +592,21 @@ public class LobbyUI : MonoBehaviour
 
         activeLobbyButtons.Clear();
         SetInteractable(true);
+
+        if (menuButtonAnimator == null)
+        {
+            menuButtonAnimator = UnityEngine.Object.FindFirstObjectByType<JustAButton>();
+        }
+
+        if (menuButtonAnimator != null)
+        {
+            menuButtonAnimator.EnableMainButtons();
+        }
+        else if (JustAButton.Instance != null)
+        {
+            JustAButton.Instance.EnableMainButtons();
+        }
+
         UpdateStatusText("Ready.");
     }
 

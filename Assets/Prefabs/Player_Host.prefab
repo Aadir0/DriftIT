@@ -274,13 +274,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 3697005682
+  GlobalObjectIdHash: 2443864240
   InScenePlacedSourceGlobalObjectIdHash: 3697005682
   DeferredDespawnTick: 0
   Ownership: 1
   AlwaysReplicateAsRoot: 0
   SynchronizeTransform: 0
-  m_InScenePlaced: 0
+  m_InScenePlaced: 1
   ActiveSceneSynchronization: 0
   SceneMigrationSynchronization: 0
   SpawnWithObservers: 1
@@ -439,6 +439,7 @@ MonoBehaviour:
   carJumpScale: 0.9
   shadowPrefab: {fileID: 4031874856162606549, guid: b3256e92454a02a4eb8dc621e6cc69e1, type: 3}
   jumpEffectPrefab: {fileID: 7470715724142129012, guid: b788dfe1df33df0469b9758763b03253, type: 3}
+  shadowOnLand: {fileID: 0}
   landingShakeDuration: 0.1
   landingShakeIntensity: 0.14
   sceneJumpOverrides: []

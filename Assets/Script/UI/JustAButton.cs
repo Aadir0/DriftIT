@@ -38,6 +38,8 @@ public class JustAButton : MonoBehaviour
     [SerializeField] private Button optionBackButton;
     [SerializeField] private Slider musicVolumeSlider;
     [SerializeField] private Slider sfxVolumeSlider;
+    [SerializeField] private TMPro.TextMeshProUGUI musicLabelText;
+    [SerializeField] private TMPro.TextMeshProUGUI sfxLabelText;
 
     [Header("Player Name Modal & Global Leaderboard")]
     [SerializeField] private GameObject nameInputModal;
@@ -46,12 +48,16 @@ public class JustAButton : MonoBehaviour
     [SerializeField] private Button nameCancelButton;
     [SerializeField] private GameObject globalLeaderboardModal;
     [SerializeField] private TMPro.TextMeshProUGUI globalLeaderboardText;
+    [SerializeField] private ScrollRect globalLeaderboardScrollRect;
+    [SerializeField] private Scrollbar globalLeaderboardScrollbar;
     [SerializeField] private Button globalLeaderboardBackButton;
 
     private int selectedIndex = 0;
     private int optionsFocusIndex = 0; // 0 = Music, 1 = SFX, 2 = Back Button
+    private int nameModalFocusIndex = 0; // 0 = Confirm, 1 = Cancel
     private float nextMoveTime;
     private float nextOptionsMoveTime;
+    private float nextNameModalMoveTime;
     private bool isBusy;
     private bool isOptionMenuOpen;
     private bool isNameModalOpen;
@@ -140,6 +146,26 @@ public class JustAButton : MonoBehaviour
                     sfxVolumeSlider = foundSliders[1];
                 }
             }
+
+            if (musicLabelText == null || sfxLabelText == null)
+            {
+                TMPro.TextMeshProUGUI[] foundTexts = OptionMenu.GetComponentsInChildren<TMPro.TextMeshProUGUI>(true);
+                if (foundTexts != null)
+                {
+                    foreach (var t in foundTexts)
+                    {
+                        string tName = (t.gameObject.name + " " + t.text).ToLower();
+                        if ((tName.Contains("music") || tName.Contains("bgm")) && musicLabelText == null)
+                        {
+                            musicLabelText = t;
+                        }
+                        else if ((tName.Contains("sfx") || tName.Contains("sound") || tName.Contains("effect")) && sfxLabelText == null)
+                        {
+                            sfxLabelText = t;
+                        }
+                    }
+                }
+            }
         }
 
         if (musicVolumeSlider != null)
@@ -150,6 +176,7 @@ public class JustAButton : MonoBehaviour
                 musicVolumeSlider.value = AudioManager.Instance.GetMusicVolume();
             }
             musicVolumeSlider.onValueChanged.AddListener(OnMusicVolumeChanged);
+            AddPointerEnterTrigger(musicVolumeSlider.gameObject, () => { optionsFocusIndex = 0; });
         }
 
         if (sfxVolumeSlider != null)
@@ -160,6 +187,12 @@ public class JustAButton : MonoBehaviour
                 sfxVolumeSlider.value = AudioManager.Instance.GetSfxVolume();
             }
             sfxVolumeSlider.onValueChanged.AddListener(OnSfxVolumeChanged);
+            AddPointerEnterTrigger(sfxVolumeSlider.gameObject, () => { optionsFocusIndex = 1; });
+        }
+
+        if (optionBackButton != null)
+        {
+            AddPointerEnterTrigger(optionBackButton.gameObject, () => { optionsFocusIndex = 2; });
         }
     }
 
@@ -262,8 +295,20 @@ public class JustAButton : MonoBehaviour
     {
         pendingNameAction = onConfirmed;
         isNameModalOpen = true;
+        nameModalFocusIndex = 0;
         DisableMainButtons();
         EnsureNameModalBuilt();
+
+        if (nameConfirmButton != null)
+        {
+            nameConfirmButton.transform.localScale = Vector3.one;
+            AddPointerEnterTrigger(nameConfirmButton.gameObject, () => { nameModalFocusIndex = 0; });
+        }
+        if (nameCancelButton != null)
+        {
+            nameCancelButton.transform.localScale = Vector3.one;
+            AddPointerEnterTrigger(nameCancelButton.gameObject, () => { nameModalFocusIndex = 1; });
+        }
 
         if (nameInputModal != null)
         {
@@ -296,6 +341,7 @@ public class JustAButton : MonoBehaviour
         PlayerPrefs.Save();
 
         CloseNameModal();
+        EnableMainButtons();
         var act = pendingNameAction;
         pendingNameAction = null;
         act?.Invoke();
@@ -312,6 +358,9 @@ public class JustAButton : MonoBehaviour
     public void CloseNameModal()
     {
         isNameModalOpen = false;
+        if (nameConfirmButton != null) nameConfirmButton.transform.localScale = Vector3.one;
+        if (nameCancelButton != null) nameCancelButton.transform.localScale = Vector3.one;
+
         if (nameInputModal != null)
         {
             nameInputModal.SetActive(false);
@@ -330,11 +379,40 @@ public class JustAButton : MonoBehaviour
 
     private void ReadNameModalInput()
     {
+        // Toggle focus strictly with Arrow keys or Gamepad D-pad (and mouse hover)
+        if (Time.unscaledTime >= nextNameModalMoveTime)
+        {
+            int horizontal = 0;
+            if (Keyboard.current != null)
+            {
+                if (Keyboard.current.leftArrowKey.wasPressedThisFrame || Keyboard.current.upArrowKey.wasPressedThisFrame)
+                    horizontal = -1;
+                else if (Keyboard.current.rightArrowKey.wasPressedThisFrame || Keyboard.current.downArrowKey.wasPressedThisFrame)
+                    horizontal = 1;
+            }
+
+            Gamepad gamepad = GetGamepad();
+            if (gamepad != null)
+            {
+                if (gamepad.dpad.left.wasPressedThisFrame || gamepad.dpad.up.wasPressedThisFrame)
+                    horizontal = -1;
+                else if (gamepad.dpad.right.wasPressedThisFrame || gamepad.dpad.down.wasPressedThisFrame)
+                    horizontal = 1;
+            }
+
+            if (horizontal != 0)
+            {
+                nameModalFocusIndex = (nameModalFocusIndex + 1) % 2;
+                nextNameModalMoveTime = Time.unscaledTime + 0.2f;
+            }
+        }
+
         if (Keyboard.current != null)
         {
             if (Keyboard.current.enterKey.wasPressedThisFrame || Keyboard.current.numpadEnterKey.wasPressedThisFrame)
             {
-                OnNameConfirmClicked();
+                if (nameModalFocusIndex == 0) OnNameConfirmClicked();
+                else OnNameCancelClicked();
                 return;
             }
             if (Keyboard.current.escapeKey.wasPressedThisFrame)
@@ -344,20 +422,59 @@ public class JustAButton : MonoBehaviour
             }
         }
 
-        Gamepad gamepad = GetGamepad();
-        if (gamepad != null)
+        Gamepad activeGamepad = GetGamepad();
+        if (activeGamepad != null)
         {
-            if (gamepad.buttonSouth.wasPressedThisFrame)
+            if (activeGamepad.buttonSouth.wasPressedThisFrame)
             {
-                OnNameConfirmClicked();
+                if (nameModalFocusIndex == 0) OnNameConfirmClicked();
+                else OnNameCancelClicked();
                 return;
             }
-            if (gamepad.buttonEast.wasPressedThisFrame)
+            if (activeGamepad.buttonEast.wasPressedThisFrame)
             {
                 OnNameCancelClicked();
                 return;
             }
         }
+
+        AnimateNameModalButtons();
+    }
+
+    private void AnimateNameModalButtons()
+    {
+        float targetConfirmScale = (nameModalFocusIndex == 0) ? 1.15f : 1.0f;
+        float targetCancelScale = (nameModalFocusIndex == 1) ? 1.15f : 1.0f;
+
+        if (nameConfirmButton != null)
+        {
+            nameConfirmButton.transform.localScale = Vector3.Lerp(
+                nameConfirmButton.transform.localScale,
+                Vector3.one * targetConfirmScale,
+                Time.unscaledDeltaTime * 14f
+            );
+        }
+
+        if (nameCancelButton != null)
+        {
+            nameCancelButton.transform.localScale = Vector3.Lerp(
+                nameCancelButton.transform.localScale,
+                Vector3.one * targetCancelScale,
+                Time.unscaledDeltaTime * 14f
+            );
+        }
+    }
+
+    private void AddPointerEnterTrigger(GameObject obj, System.Action onEnter)
+    {
+        if (obj == null) return;
+        EventTrigger trigger = obj.GetComponent<EventTrigger>();
+        if (trigger == null) trigger = obj.AddComponent<EventTrigger>();
+
+        EventTrigger.Entry entry = new EventTrigger.Entry();
+        entry.eventID = EventTriggerType.PointerEnter;
+        entry.callback.AddListener((data) => { onEnter?.Invoke(); });
+        trigger.triggers.Add(entry);
     }
 
     public void OpenGlobalLeaderboard()
@@ -373,6 +490,7 @@ public class JustAButton : MonoBehaviour
             globalLeaderboardModal.SetActive(true);
         }
 
+        SetupLeaderboardUI();
         PopulateGlobalLeaderboardUI();
 
         if (CursorManager.Instance != null)
@@ -419,9 +537,32 @@ public class JustAButton : MonoBehaviour
 
     private void ReadLeaderboardModalInput()
     {
+        // Smooth scrolling strictly via Keyboard Arrow keys / PageUp/PageDown, Gamepad D-Pad, or Mouse Wheel
+        float scrollDelta = 0f;
         if (Keyboard.current != null)
         {
-            if (Keyboard.current.escapeKey.wasPressedThisFrame || Keyboard.current.enterKey.wasPressedThisFrame)
+            if (Keyboard.current.upArrowKey.isPressed)
+            {
+                scrollDelta += 2.0f * Time.unscaledDeltaTime;
+            }
+            else if (Keyboard.current.downArrowKey.isPressed)
+            {
+                scrollDelta -= 2.0f * Time.unscaledDeltaTime;
+            }
+
+            if (Keyboard.current.pageUpKey.wasPressedThisFrame)
+            {
+                scrollDelta += 0.35f;
+            }
+            else if (Keyboard.current.pageDownKey.wasPressedThisFrame)
+            {
+                scrollDelta -= 0.35f;
+            }
+
+            if (Keyboard.current.escapeKey.wasPressedThisFrame ||
+                Keyboard.current.enterKey.wasPressedThisFrame ||
+                Keyboard.current.numpadEnterKey.wasPressedThisFrame ||
+                Keyboard.current.spaceKey.wasPressedThisFrame)
             {
                 CloseGlobalLeaderboard();
                 return;
@@ -431,22 +572,159 @@ public class JustAButton : MonoBehaviour
         Gamepad gamepad = GetGamepad();
         if (gamepad != null)
         {
-            if (gamepad.buttonWest.wasPressedThisFrame)
+            Vector2 dpadVec = gamepad.dpad.ReadValue();
+
+            if (dpadVec.y > 0.3f || gamepad.dpad.up.isPressed)
+            {
+                scrollDelta += 2.0f * Time.unscaledDeltaTime;
+            }
+            else if (dpadVec.y < -0.3f || gamepad.dpad.down.isPressed)
+            {
+                scrollDelta -= 2.0f * Time.unscaledDeltaTime;
+            }
+
+            if (gamepad.buttonEast.wasPressedThisFrame ||
+                gamepad.buttonWest.wasPressedThisFrame ||
+                gamepad.buttonSouth.wasPressedThisFrame)
             {
                 CloseGlobalLeaderboard();
                 return;
+            }
+        }
+
+        if (Mouse.current != null)
+        {
+            float mouseWheel = Mouse.current.scroll.ReadValue().y;
+            if (Mathf.Abs(mouseWheel) > 0.01f)
+            {
+                scrollDelta += Mathf.Sign(mouseWheel) * 0.15f;
+            }
+        }
+
+        if (Mathf.Abs(scrollDelta) > 0.0001f)
+        {
+            if (globalLeaderboardScrollRect != null)
+            {
+                globalLeaderboardScrollRect.verticalNormalizedPosition = Mathf.Clamp01(globalLeaderboardScrollRect.verticalNormalizedPosition + scrollDelta);
+            }
+            if (globalLeaderboardScrollbar != null)
+            {
+                globalLeaderboardScrollbar.value = Mathf.Clamp01(globalLeaderboardScrollbar.value + scrollDelta);
+            }
+        }
+    }
+
+    private void SetupLeaderboardUI()
+    {
+        if (globalLeaderboardModal == null) return;
+
+        // 1. Maintain the full wooden board display size (~720px height)
+        if (globalLeaderboardScrollRect != null)
+        {
+            RectTransform scrollRectRt = globalLeaderboardScrollRect.GetComponent<RectTransform>();
+            scrollRectRt.anchorMin = new Vector2(0f, 0.5f);
+            scrollRectRt.anchorMax = new Vector2(1f, 0.5f);
+            scrollRectRt.anchoredPosition = new Vector2(0f, -10f);
+            scrollRectRt.sizeDelta = new Vector2(-160f, 720f); // 720px height matches original large board area
+
+            // Add RectMask2D on the viewport so overflowing rows are clipped cleanly
+            RectMask2D mask = globalLeaderboardScrollRect.GetComponent<RectMask2D>();
+            if (mask == null)
+            {
+                mask = globalLeaderboardScrollRect.gameObject.AddComponent<RectMask2D>();
+            }
+
+            // Move Text to a dedicated child Content GameObject if it was placed on the ScrollRect itself
+            Transform existingContent = globalLeaderboardScrollRect.transform.Find("LeaderboardContent");
+            GameObject contentObj;
+            TMPro.TextMeshProUGUI childTmp;
+
+            if (existingContent != null)
+            {
+                contentObj = existingContent.gameObject;
+                childTmp = contentObj.GetComponent<TMPro.TextMeshProUGUI>();
+            }
+            else
+            {
+                contentObj = new GameObject("LeaderboardContent", typeof(RectTransform), typeof(CanvasRenderer), typeof(TMPro.TextMeshProUGUI));
+                contentObj.transform.SetParent(globalLeaderboardScrollRect.transform, false);
+                childTmp = contentObj.GetComponent<TMPro.TextMeshProUGUI>();
+
+                if (globalLeaderboardText != null && globalLeaderboardText.font != null)
+                {
+                    childTmp.font = globalLeaderboardText.font;
+                }
+                childTmp.color = Color.white;
+                childTmp.richText = true;
+
+                if (globalLeaderboardText != null && globalLeaderboardText.gameObject == globalLeaderboardScrollRect.gameObject)
+                {
+                    globalLeaderboardText.text = "";
+                    globalLeaderboardText.enabled = false;
+                }
+            }
+
+            RectTransform contentRt = contentObj.GetComponent<RectTransform>();
+            contentRt.anchorMin = new Vector2(0f, 1f);
+            contentRt.anchorMax = new Vector2(1f, 1f);
+            contentRt.pivot = new Vector2(0.5f, 1f);
+            contentRt.anchoredPosition = Vector2.zero;
+            contentRt.sizeDelta = new Vector2(-60f, 1500f); // Generous height for large text entries
+
+            // Large 62px arcade font size so exactly 5 names fill the 720px board window
+            childTmp.fontSize = 62f;
+            childTmp.enableAutoSizing = false;
+            childTmp.enableWordWrapping = false;
+            childTmp.overflowMode = TMPro.TextOverflowModes.Overflow;
+            childTmp.alignment = TMPro.TextAlignmentOptions.TopLeft;
+
+            globalLeaderboardText = childTmp;
+
+            globalLeaderboardScrollRect.viewport = scrollRectRt;
+            globalLeaderboardScrollRect.content = contentRt;
+            globalLeaderboardScrollRect.horizontal = false;
+            globalLeaderboardScrollRect.vertical = true;
+            globalLeaderboardScrollRect.movementType = ScrollRect.MovementType.Clamped;
+            globalLeaderboardScrollRect.scrollSensitivity = 50f;
+
+            if (globalLeaderboardScrollbar != null)
+            {
+                RectTransform scrollbarRt = globalLeaderboardScrollbar.GetComponent<RectTransform>();
+                scrollbarRt.anchorMin = new Vector2(1f, 0f);
+                scrollbarRt.anchorMax = new Vector2(1f, 1f);
+                scrollbarRt.anchoredPosition = new Vector2(-15f, 0f);
+                scrollbarRt.sizeDelta = new Vector2(14f, -20f);
+
+                Image trackImg = globalLeaderboardScrollbar.GetComponent<Image>();
+                if (trackImg != null)
+                {
+                    trackImg.color = new Color(0.12f, 0.15f, 0.20f, 0.65f);
+                }
+
+                if (globalLeaderboardScrollbar.targetGraphic != null)
+                {
+                    globalLeaderboardScrollbar.targetGraphic.color = new Color(0f, 1f, 0.64f, 0.9f);
+                }
+
+                globalLeaderboardScrollbar.direction = Scrollbar.Direction.BottomToTop;
+                globalLeaderboardScrollbar.size = 0.45f;
+                globalLeaderboardScrollRect.verticalScrollbar = globalLeaderboardScrollbar;
+                globalLeaderboardScrollRect.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
             }
         }
     }
 
     private void PopulateGlobalLeaderboardUI()
     {
-        if (globalLeaderboardText == null) return;
+        if (globalLeaderboardText == null && globalLeaderboardModal == null) return;
 
-        globalLeaderboardText.alignment = TMPro.TextAlignmentOptions.TopLeft;
+        SetupLeaderboardUI();
+
+        if (globalLeaderboardText == null) return;
 
         if (LeaderboardManager.Instance == null)
         {
+            globalLeaderboardText.alignment = TMPro.TextAlignmentOptions.Center;
             globalLeaderboardText.text = "<color=#6B7C93>Leaderboard unavailable.</color>";
             return;
         }
@@ -455,16 +733,18 @@ public class JustAButton : MonoBehaviour
         if (entries == null || entries.Count == 0)
         {
             globalLeaderboardText.alignment = TMPro.TextAlignmentOptions.Center;
-            globalLeaderboardText.text = "<size=110%><color=#8E9BAE>NO CLEAN RUNS REGISTERED YET</color></size>\n\n<size=85%><color=#6B7C93>Clear all stages without timing out to qualify for the Global Leaderboard!</color></size>";
+            globalLeaderboardText.text = "<size=110%><color=#8E9BAE>NO CLEAN RUNS REGISTERED YET</color></size>\n\n<size=85%><color=#6B7C93>Clear all 6 stages without timing out to qualify for the Global Leaderboard!</color></size>";
             return;
         }
 
-        string table = "<size=105%><b><color=#8E9BAE>" +
-                       "<pos=15%>RANK" +
-                       "<pos=27%>DRIVER" +
-                       "<pos=53%>TIME" +
-                       "<pos=66.5%>DEATHS" +
-                       "<pos=79.5%>GRADE" +
+        globalLeaderboardText.alignment = TMPro.TextAlignmentOptions.TopLeft;
+
+        string table = "<size=95%><b><color=#8E9BAE>" +
+                       "<pos=4%>RANK" +
+                       "<pos=19%>DRIVER" +
+                       "<pos=50%>TIME" +
+                       "<pos=71%>DEATHS" +
+                       "<pos=87%>GRADE" +
                        "</color></b></size>\n\n";
 
         for (int i = 0; i < entries.Count; i++)
@@ -488,18 +768,41 @@ public class JustAButton : MonoBehaviour
                 _   => "#FF4D6D"
             };
             string deathColor = e.totalDeaths == 0 ? "#00FFA3" : "#FF6B6B";
-            string nameTruncated = (e.playerName.Length > 16) ? e.playerName.Substring(0, 16) : e.playerName;
+            string nameTruncated = (e.playerName.Length > 12) ? e.playerName.Substring(0, 12) : e.playerName;
 
             string deathsStr = e.totalDeaths.ToString();
-            string deathPos = (deathsStr.Length > 1) ? "<pos=68.6%>" : "<pos=69.3%>";
+            string deathPos = (deathsStr.Length > 1) ? "<pos=72.5%>" : "<pos=73.5%>";
 
-            table += $"<pos=15%><b>{rankMedal}</b>" +
-                     $"<pos=27%><color=#FFFFFF>{nameTruncated}</color>" +
-                     $"<pos=53%><b><color=#00FFA3>{tStr}</color></b>" +
+            table += $"<pos=4%><b>{rankMedal}</b>" +
+                     $"<pos=19%><color=#FFFFFF>{nameTruncated}</color>" +
+                     $"<pos=50%><b><color=#00FFA3>{tStr}</color></b>" +
                      $"{deathPos}<color={deathColor}>{deathsStr}</color>" +
-                     $"<pos=81.2%><color={gradeColor}>[{e.grade}]</color>\n\n";
+                     $"<pos=88%><color={gradeColor}>[{e.grade}]</color>\n\n";
         }
         globalLeaderboardText.text = table;
+        globalLeaderboardText.ForceMeshUpdate();
+
+        // Calculate preferred height and size Content RectTransform so scrolling activates properly
+        if (globalLeaderboardScrollRect != null && globalLeaderboardScrollRect.content != null)
+        {
+            RectTransform contentRt = globalLeaderboardScrollRect.content;
+            float textPrefHeight = globalLeaderboardText.preferredHeight;
+            float viewportHeight = (globalLeaderboardScrollRect.viewport != null) ? globalLeaderboardScrollRect.viewport.rect.height : 720f;
+
+            float targetHeight = Mathf.Max(textPrefHeight + 80f, viewportHeight + 150f);
+            contentRt.sizeDelta = new Vector2(contentRt.sizeDelta.x, targetHeight);
+        }
+
+        Canvas.ForceUpdateCanvases();
+
+        if (globalLeaderboardScrollbar != null)
+        {
+            globalLeaderboardScrollbar.value = 1f;
+        }
+        if (globalLeaderboardScrollRect != null)
+        {
+            globalLeaderboardScrollRect.verticalNormalizedPosition = 1f;
+        }
     }
 
     private void EnsureNameModalBuilt()
@@ -643,7 +946,7 @@ public class JustAButton : MonoBehaviour
         GameObject box = new GameObject("Box", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
         box.transform.SetParent(overlay.transform, false);
         RectTransform boxRt = box.GetComponent<RectTransform>();
-        boxRt.sizeDelta = new Vector2(680f, 460f);
+        boxRt.sizeDelta = new Vector2(700f, 480f);
         Image boxImg = box.GetComponent<Image>();
         boxImg.color = new Color(0.09f, 0.11f, 0.14f, 0.98f);
 
@@ -651,29 +954,113 @@ public class JustAButton : MonoBehaviour
         GameObject titleObj = new GameObject("Title", typeof(RectTransform), typeof(CanvasRenderer), typeof(TMPro.TextMeshProUGUI));
         titleObj.transform.SetParent(box.transform, false);
         RectTransform titleRt = titleObj.GetComponent<RectTransform>();
-        titleRt.anchoredPosition = new Vector2(0f, 180f);
-        titleRt.sizeDelta = new Vector2(640f, 50f);
+        titleRt.anchoredPosition = new Vector2(0f, 190f);
+        titleRt.sizeDelta = new Vector2(660f, 50f);
         TMPro.TextMeshProUGUI titleTmp = titleObj.GetComponent<TMPro.TextMeshProUGUI>();
         titleTmp.text = "<b><color=#00FFA3>GLOBAL</color> <color=#FFFFFF>LEADERBOARD</color></b>\n<size=50%><color=#8E9BAE>TOP DRIVERS (CLEAN RUNS ONLY)</color></size>";
         titleTmp.fontSize = 24;
         titleTmp.alignment = TMPro.TextAlignmentOptions.Center;
 
+        // Scroll Container (Transparent, bounds the scrollable TMP text area)
+        GameObject scrollViewObj = new GameObject("ScrollArea", typeof(RectTransform), typeof(ScrollRect));
+        scrollViewObj.transform.SetParent(box.transform, false);
+        RectTransform scrollRt = scrollViewObj.GetComponent<RectTransform>();
+        scrollRt.anchoredPosition = new Vector2(-8f, 18f);
+        scrollRt.sizeDelta = new Vector2(640f, 265f);
+
+        globalLeaderboardScrollRect = scrollViewObj.GetComponent<ScrollRect>();
+        globalLeaderboardScrollRect.horizontal = false;
+        globalLeaderboardScrollRect.vertical = true;
+        globalLeaderboardScrollRect.movementType = ScrollRect.MovementType.Clamped;
+        globalLeaderboardScrollRect.scrollSensitivity = 35f;
+
+        // Viewport (Masks the text so it does not bleed beyond the bounds)
+        GameObject viewportObj = new GameObject("Viewport", typeof(RectTransform), typeof(RectMask2D));
+        viewportObj.transform.SetParent(scrollViewObj.transform, false);
+        RectTransform viewportRt = viewportObj.GetComponent<RectTransform>();
+        viewportRt.anchorMin = Vector2.zero;
+        viewportRt.anchorMax = Vector2.one;
+        viewportRt.offsetMin = Vector2.zero;
+        viewportRt.offsetMax = Vector2.zero;
+
+        globalLeaderboardScrollRect.viewport = viewportRt;
+
         // Content
-        GameObject contentObj = new GameObject("Content", typeof(RectTransform), typeof(CanvasRenderer), typeof(TMPro.TextMeshProUGUI));
-        contentObj.transform.SetParent(box.transform, false);
+        GameObject contentObj = new GameObject("Content", typeof(RectTransform), typeof(CanvasRenderer), typeof(TMPro.TextMeshProUGUI), typeof(ContentSizeFitter));
+        contentObj.transform.SetParent(viewportObj.transform, false);
         RectTransform contentRt = contentObj.GetComponent<RectTransform>();
-        contentRt.anchoredPosition = new Vector2(0f, 10f);
-        contentRt.sizeDelta = new Vector2(620f, 260f);
+        contentRt.anchorMin = new Vector2(0f, 1f);
+        contentRt.anchorMax = new Vector2(1f, 1f);
+        contentRt.pivot = new Vector2(0.5f, 1f);
+        contentRt.anchoredPosition = Vector2.zero;
+        contentRt.sizeDelta = new Vector2(0f, 300f);
+
+        ContentSizeFitter fitter = contentObj.GetComponent<ContentSizeFitter>();
+        fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+        fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+
+        globalLeaderboardScrollRect.content = contentRt;
+
         globalLeaderboardText = contentObj.GetComponent<TMPro.TextMeshProUGUI>();
         globalLeaderboardText.fontSize = 17;
         globalLeaderboardText.alignment = TMPro.TextAlignmentOptions.TopLeft;
+        globalLeaderboardText.enableWordWrapping = false;
+
+        // Sleek Vertical Scrollbar on Right Side
+        GameObject scrollbarObj = new GameObject("Scrollbar", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Scrollbar));
+        scrollbarObj.transform.SetParent(box.transform, false);
+        RectTransform scrollbarRt = scrollbarObj.GetComponent<RectTransform>();
+        scrollbarRt.anchoredPosition = new Vector2(325f, 18f);
+        scrollbarRt.sizeDelta = new Vector2(8f, 260f);
+        Image scrollbarTrack = scrollbarObj.GetComponent<Image>();
+        scrollbarTrack.color = new Color(0.14f, 0.17f, 0.22f, 0.8f);
+
+        GameObject slidingArea = new GameObject("Sliding Area", typeof(RectTransform));
+        slidingArea.transform.SetParent(scrollbarObj.transform, false);
+        RectTransform slidingAreaRt = slidingArea.GetComponent<RectTransform>();
+        slidingAreaRt.anchorMin = Vector2.zero;
+        slidingAreaRt.anchorMax = Vector2.one;
+        slidingAreaRt.offsetMin = Vector2.zero;
+        slidingAreaRt.offsetMax = Vector2.zero;
+
+        GameObject handleObj = new GameObject("Handle", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        handleObj.transform.SetParent(slidingArea.transform, false);
+        RectTransform handleRt = handleObj.GetComponent<RectTransform>();
+        handleRt.anchorMin = Vector2.zero;
+        handleRt.anchorMax = Vector2.one;
+        handleRt.offsetMin = Vector2.zero;
+        handleRt.offsetMax = Vector2.zero;
+        Image handleImg = handleObj.GetComponent<Image>();
+        handleImg.color = new Color(0f, 1f, 0.64f, 0.85f); // #00FFA3 Accent
+
+        globalLeaderboardScrollbar = scrollbarObj.GetComponent<Scrollbar>();
+        globalLeaderboardScrollbar.handleRect = handleRt;
+        globalLeaderboardScrollbar.targetGraphic = handleImg;
+        globalLeaderboardScrollbar.direction = Scrollbar.Direction.BottomToTop;
+        globalLeaderboardScrollbar.numberOfSteps = 0;
+        globalLeaderboardScrollbar.size = 0.3f;
+        globalLeaderboardScrollbar.value = 1f;
+
+        // Connect scrollbar to ScrollRect
+        globalLeaderboardScrollRect.verticalScrollbar = globalLeaderboardScrollbar;
+        globalLeaderboardScrollRect.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
+
+        // Scroll Hint Note
+        GameObject hintObj = new GameObject("ScrollHint", typeof(RectTransform), typeof(CanvasRenderer), typeof(TMPro.TextMeshProUGUI));
+        hintObj.transform.SetParent(box.transform, false);
+        RectTransform hintRt = hintObj.GetComponent<RectTransform>();
+        hintRt.anchoredPosition = new Vector2(0f, -135f);
+        hintRt.sizeDelta = new Vector2(600f, 20f);
+        TMPro.TextMeshProUGUI hintTmp = hintObj.GetComponent<TMPro.TextMeshProUGUI>();
+        hintTmp.text = "<color=#6B7C93><size=75%>Scroll using Arrow Keys [▲/▼], Gamepad D-Pad, or Mouse Wheel</size></color>";
+        hintTmp.alignment = TMPro.TextAlignmentOptions.Center;
 
         // Back Button
         GameObject backBtnObj = new GameObject("BackBtn", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
         backBtnObj.transform.SetParent(box.transform, false);
         RectTransform backRt = backBtnObj.GetComponent<RectTransform>();
-        backRt.anchoredPosition = new Vector2(0f, -180f);
-        backRt.sizeDelta = new Vector2(200f, 45f);
+        backRt.anchoredPosition = new Vector2(0f, -190f);
+        backRt.sizeDelta = new Vector2(200f, 42f);
         Image backImg = backBtnObj.GetComponent<Image>();
         backImg.color = new Color(0.18f, 0.22f, 0.28f, 1f);
         globalLeaderboardBackButton = backBtnObj.GetComponent<Button>();
@@ -793,6 +1180,10 @@ public class JustAButton : MonoBehaviour
     {
         isOptionMenuOpen = false;
 
+        if (musicLabelText != null) musicLabelText.transform.localScale = Vector3.one;
+        if (sfxLabelText != null) sfxLabelText.transform.localScale = Vector3.one;
+        if (optionBackButton != null) optionBackButton.transform.localScale = Vector3.one;
+
         if (OptionMenu != null)
         {
             OptionMenu.SetActive(false);
@@ -818,7 +1209,7 @@ public class JustAButton : MonoBehaviour
         SelectButton(selectedIndex);
     }
 
-    private void DisableMainButtons()
+    public void DisableMainButtons()
     {
         foreach (Button button in buttons)
         {
@@ -827,9 +1218,13 @@ public class JustAButton : MonoBehaviour
                 button.interactable = false;
             }
         }
+        if (hostGameButton != null) hostGameButton.interactable = false;
+        if (joinGameButton != null) joinGameButton.interactable = false;
+        if (optionsButton != null) optionsButton.interactable = false;
+        if (leaderboardButton != null) leaderboardButton.interactable = false;
     }
 
-    private void EnableMainButtons()
+    public void EnableMainButtons()
     {
         foreach (Button button in buttons)
         {
@@ -838,6 +1233,10 @@ public class JustAButton : MonoBehaviour
                 button.interactable = true;
             }
         }
+        if (hostGameButton != null) hostGameButton.interactable = true;
+        if (joinGameButton != null) joinGameButton.interactable = true;
+        if (optionsButton != null) optionsButton.interactable = true;
+        if (leaderboardButton != null) leaderboardButton.interactable = true;
     }
 
     private void ReadOptionsInput()
@@ -868,51 +1267,46 @@ public class JustAButton : MonoBehaviour
             int verticalMove = 0;
             if (Keyboard.current != null)
             {
-                if (Keyboard.current.upArrowKey.wasPressedThisFrame || Keyboard.current.wKey.wasPressedThisFrame)
+                if (Keyboard.current.upArrowKey.wasPressedThisFrame)
                     verticalMove = -1;
-                else if (Keyboard.current.downArrowKey.wasPressedThisFrame || Keyboard.current.sKey.wasPressedThisFrame)
+                else if (Keyboard.current.downArrowKey.wasPressedThisFrame)
                     verticalMove = 1;
             }
 
             if (gamepad != null)
             {
-                Vector2 dpadVal = gamepad.dpad.ReadValue();
-                Vector2 stickVal = gamepad.leftStick.ReadValue();
-                if (gamepad.dpad.up.wasPressedThisFrame || dpadVal.y >= 0.4f || stickVal.y >= 0.4f)
+                if (gamepad.dpad.up.wasPressedThisFrame)
                     verticalMove = -1;
-                else if (gamepad.dpad.down.wasPressedThisFrame || dpadVal.y <= -0.4f || stickVal.y <= -0.4f)
+                else if (gamepad.dpad.down.wasPressedThisFrame)
                     verticalMove = 1;
             }
 
             if (verticalMove != 0)
             {
-                int maxItems = sfxVolumeSlider != null ? 3 : 2;
+                int maxItems = (optionBackButton != null) ? 3 : (sfxVolumeSlider != null ? 2 : 1);
                 optionsFocusIndex = (optionsFocusIndex + verticalMove + maxItems) % maxItems;
                 nextOptionsMoveTime = Time.unscaledTime + 0.2f;
             }
         }
 
-        // Handle Gamepad / Keyboard Horizontal Slider Control
+        // Handle Gamepad D-Pad / Keyboard Arrow Keys Horizontal Slider Control
         if (Time.unscaledTime >= nextSliderAdjustTime)
         {
             float horizontal = 0f;
 
             if (Keyboard.current != null)
             {
-                if (Keyboard.current.leftArrowKey.isPressed || Keyboard.current.aKey.isPressed)
+                if (Keyboard.current.leftArrowKey.isPressed)
                     horizontal = -1f;
-                else if (Keyboard.current.rightArrowKey.isPressed || Keyboard.current.dKey.isPressed)
+                else if (Keyboard.current.rightArrowKey.isPressed)
                     horizontal = 1f;
             }
 
             if (gamepad != null)
             {
-                Vector2 dpadVal = gamepad.dpad.ReadValue();
-                Vector2 stickVal = gamepad.leftStick.ReadValue();
-
-                if (gamepad.dpad.left.isPressed || dpadVal.x <= -0.4f || stickVal.x <= -0.4f)
+                if (gamepad.dpad.left.isPressed)
                     horizontal = -1f;
-                else if (gamepad.dpad.right.isPressed || dpadVal.x >= 0.4f || stickVal.x >= 0.4f)
+                else if (gamepad.dpad.right.isPressed)
                     horizontal = 1f;
             }
 
@@ -947,7 +1341,7 @@ public class JustAButton : MonoBehaviour
             }
         }
 
-        if (optionBackButton != null)
+        if (optionBackButton != null && optionsFocusIndex == 2)
         {
             bool submitPressed = false;
 
@@ -973,6 +1367,42 @@ public class JustAButton : MonoBehaviour
             {
                 optionBackButton.onClick.Invoke();
             }
+        }
+
+        AnimateOptionsVisuals();
+    }
+
+    private void AnimateOptionsVisuals()
+    {
+        float targetMusicScale = (optionsFocusIndex == 0) ? 1.2f : 1.0f;
+        float targetSfxScale = (optionsFocusIndex == 1) ? 1.2f : 1.0f;
+        float targetBackScale = (optionsFocusIndex == 2) ? 1.15f : 1.0f;
+
+        if (musicLabelText != null)
+        {
+            musicLabelText.transform.localScale = Vector3.Lerp(
+                musicLabelText.transform.localScale,
+                Vector3.one * targetMusicScale,
+                Time.unscaledDeltaTime * 12f
+            );
+        }
+
+        if (sfxLabelText != null)
+        {
+            sfxLabelText.transform.localScale = Vector3.Lerp(
+                sfxLabelText.transform.localScale,
+                Vector3.one * targetSfxScale,
+                Time.unscaledDeltaTime * 12f
+            );
+        }
+
+        if (optionBackButton != null)
+        {
+            optionBackButton.transform.localScale = Vector3.Lerp(
+                optionBackButton.transform.localScale,
+                Vector3.one * targetBackScale,
+                Time.unscaledDeltaTime * 12f
+            );
         }
     }
 

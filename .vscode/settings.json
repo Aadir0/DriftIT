@@ -67,5 +67,5 @@
         "*.sln": "*.csproj",
         "*.slnx": "*.csproj"
     },
-    "dotnet.defaultSolution": "Where-is-the-Brake-Multiplayer.slnx"
+    "dotnet.defaultSolution": "DriftIT.slnx"
 }

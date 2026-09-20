@@ -73,6 +73,7 @@ public class NetworkCarController : NetworkBehaviour
     [SerializeField] private float carJumpScale = 1.32f; // Scales UP cleanly for arcade elevation
     [SerializeField] private ShadowJump shadowPrefab;
     [SerializeField] private GameObject jumpEffectPrefab;
+    [SerializeField] private GameObject shadowOnLand;
 
     [Header("Landing Camera Shake")]
     [SerializeField] private float landingShakeDuration = 0.10f;
@@ -1103,6 +1104,11 @@ public static void UpdateAllCarsSceneVisibility()
         isJumping = false;
         nextJumpTime = 0f; // Reset jump cooldown immediately upon landing back on Ground layer!
 
+        if (shadowOnLand != null)
+        {
+            shadowOnLand.SetActive(true);
+        }
+
         if (boxCollider != null)
         {
             boxCollider.gameObject.layer = playerLayer;
@@ -1512,6 +1518,11 @@ public static void UpdateAllCarsSceneVisibility()
         isJumping = true;
         jumpStartTime = Time.time;
         StopCarAudio();
+
+        if (shadowOnLand != null)
+        {
+            shadowOnLand.SetActive(false);
+        }
 
         if (effectsAudioSource != null && jumpSound != null)
         {

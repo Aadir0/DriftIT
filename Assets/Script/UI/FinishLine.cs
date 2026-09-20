@@ -156,7 +156,7 @@ public class FinishLine : MonoBehaviour
 
                 if (!isRecorded)
                 {
-                    float elapsedTime = LevelTimer.Instance != null ? LevelTimer.Instance.GetCurrentLevelElapsedTime() : 40f;
+                    float elapsedTime = LevelTimer.Instance != null ? LevelTimer.Instance.GetCurrentLevelElapsedTime() : 0f;
                     int deaths = CarHealth.LocalPlayerHealth != null ? CarHealth.LocalPlayerHealth.LocalLevelDeaths : 0;
                     LeaderboardManager.Instance.RecordLevelCompletion(sceneName, elapsedTime, deaths, isTimeout: true);
                 }

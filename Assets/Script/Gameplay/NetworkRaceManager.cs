@@ -433,6 +433,11 @@ public class NetworkRaceManager : NetworkBehaviour
         if (string.Equals(cleanName, "Level 5", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(cleanName, "Level5", StringComparison.OrdinalIgnoreCase))
         {
+            return "Level 6";
+        }
+        if (string.Equals(cleanName, "Level 6", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(cleanName, "Level6", StringComparison.OrdinalIgnoreCase))
+        {
             return "Ending";
         }
 
@@ -442,7 +447,7 @@ public class NetworkRaceManager : NetworkBehaviour
             string numStr = cleanName.Substring(5).Trim();
             if (int.TryParse(numStr, out int lvlNum))
             {
-                if (lvlNum >= 1 && lvlNum < 5)
+                if (lvlNum >= 1 && lvlNum < 6)
                 {
                     return "Level " + (lvlNum + 1);
                 }

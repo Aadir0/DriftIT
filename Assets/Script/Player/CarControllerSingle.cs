@@ -72,6 +72,7 @@ public class CarControllerSingle : MonoBehaviour
     [SerializeField] private float carJumpScale = 1.32f; // Scales UP cleanly for arcade elevation
     [SerializeField] private ShadowJump shadowPrefab;
     [SerializeField] private GameObject jumpEffectPrefab;
+    [SerializeField] private GameObject shadowOnLand;
 
     [Header("Landing Camera Shake")]
     [SerializeField] private float landingShakeDuration = 0.10f;
@@ -710,6 +711,11 @@ public class CarControllerSingle : MonoBehaviour
         isJumping = false;
         nextJumpTime = 0f; // Reset jump cooldown immediately upon landing back on Ground layer!
 
+        if (shadowOnLand != null)
+        {
+            shadowOnLand.SetActive(true);
+        }
+
         Physics2D.IgnoreLayerCollision(playerLayer, jumpCollisionLayer, false);
 
         if (spawnedJumpEffect != null)
@@ -734,6 +740,11 @@ public class CarControllerSingle : MonoBehaviour
     private IEnumerator JumpEffect()
     {
         isJumping = true;
+
+        if (shadowOnLand != null)
+        {
+            shadowOnLand.SetActive(false);
+        }
 
         if (jumpEffectPrefab != null)
         {

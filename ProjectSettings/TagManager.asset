@@ -16,7 +16,6 @@ TagManager:
   - Jump
   - Timer
   - TimeOver
-  - TimeIsLess
   - Confiner
   layers:
   - Default

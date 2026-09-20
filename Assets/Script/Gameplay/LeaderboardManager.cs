@@ -30,6 +30,35 @@ public class LeaderboardDataWrapper
     public List<LeaderboardEntry> entries = new List<LeaderboardEntry>();
 }
 
+[System.Serializable]
+public class GlobalLeaderboardStageItem
+{
+    public string levelName;
+    public float timeSeconds;
+    public string formattedTime;
+    public int deaths;
+}
+
+[System.Serializable]
+public class GlobalLeaderboardRunItem
+{
+    public int rank;
+    public string playerName;
+    public float totalTimeSeconds;
+    public string formattedTime;
+    public int totalDeaths;
+    public string grade;
+    public string dateTime;
+    public List<GlobalLeaderboardStageItem> stages = new List<GlobalLeaderboardStageItem>();
+}
+
+[System.Serializable]
+public class GlobalLeaderboardFileRoot
+{
+    public string lastUpdated;
+    public List<GlobalLeaderboardRunItem> leaderboard = new List<GlobalLeaderboardRunItem>();
+}
+
 public class LeaderboardManager : MonoBehaviour
 {
     private static LeaderboardManager _instance;
@@ -53,7 +82,7 @@ public class LeaderboardManager : MonoBehaviour
     }
 
     private const string PREFS_KEY = "GameLeaderboardData";
-    private const int MAX_LEADERBOARD_ENTRIES = 5;
+    private const int MAX_LEADERBOARD_ENTRIES = 10;
     private const float DEATH_PENALTY_SECONDS = 5.0f;
     private const float TIMEOUT_PENALTY_SECONDS = 15.0f;
 
@@ -186,8 +215,8 @@ public class LeaderboardManager : MonoBehaviour
         else if (score <= 330f) baseGrade = "B";
         else baseGrade = "C";
 
-        // Rule: Each timeout level reduces 1 rank
-        string[] rankOrder = { "S", "A", "B", "C", "D", "F" };
+        // Rule: Each timeout level reduces 1 rank (e.g. S with 1 timeout becomes A, with 2 timeouts becomes B)
+        string[] rankOrder = { "S", "A", "B", "C", "D", "E", "F" };
         int baseIndex = Array.IndexOf(rankOrder, baseGrade);
         if (baseIndex < 0) baseIndex = 0;
         int finalIndex = Mathf.Clamp(baseIndex + timeouts, 0, rankOrder.Length - 1);
@@ -213,7 +242,7 @@ public class LeaderboardManager : MonoBehaviour
 
         if (expectedLevels.Count == 0)
         {
-            expectedLevels.AddRange(new[] { "Level 1", "Level 2", "Level 3", "Level 4" });
+            expectedLevels.AddRange(new[] { "Level 1", "Level 2", "Level 3", "Level 4", "Level 5", "Level 6" });
         }
 
         foreach (string lvl in expectedLevels)
@@ -260,7 +289,7 @@ public class LeaderboardManager : MonoBehaviour
 
         float score = CalculatePerformanceScore(totalRunTime, totalRunDeaths, totalRunTimeouts);
         string grade = CalculateGrade(totalRunTime, totalRunDeaths, totalRunTimeouts);
-        string currentDate = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+        string currentDate = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 
         LeaderboardEntry entry = new LeaderboardEntry
         {
@@ -282,8 +311,146 @@ public class LeaderboardManager : MonoBehaviour
         }
 
         SaveLeaderboardToPrefs();
+        SaveLeaderboardToJsonFile(playerName, totalRunTime, totalRunDeaths, grade);
         hasSavedCurrentRun = true;
         return true;
+    }
+
+    public static string GetLeaderboardJsonFilePath()
+    {
+        string docsPath = null;
+        try
+        {
+            string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            if (!string.IsNullOrEmpty(userProfile))
+            {
+                string directDocs = System.IO.Path.Combine(userProfile, "Documents");
+                if (System.IO.Directory.Exists(directDocs))
+                {
+                    docsPath = directDocs;
+                }
+            }
+        }
+        catch { }
+
+        if (string.IsNullOrEmpty(docsPath))
+        {
+            docsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        }
+
+        if (string.IsNullOrEmpty(docsPath))
+        {
+            docsPath = @"C:\Users\Anuj Chauhan\Documents";
+        }
+
+        string dir = System.IO.Path.Combine(docsPath, "DriftIT");
+        if (!System.IO.Directory.Exists(dir))
+        {
+            try
+            {
+                System.IO.Directory.CreateDirectory(dir);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[LeaderboardManager] Failed creating folder {dir}: {ex.Message}");
+            }
+        }
+        return System.IO.Path.Combine(dir, "leaderboard.json");
+    }
+
+    private void SaveLeaderboardToJsonFile(string playerName, float runTime, int runDeaths, string runGrade)
+    {
+        try
+        {
+            string filePath = GetLeaderboardJsonFilePath();
+            GlobalLeaderboardFileRoot root = new GlobalLeaderboardFileRoot();
+
+            if (System.IO.File.Exists(filePath))
+            {
+                try
+                {
+                    string existingJson = System.IO.File.ReadAllText(filePath, System.Text.Encoding.UTF8);
+                    if (!string.IsNullOrWhiteSpace(existingJson))
+                    {
+                        var loaded = JsonUtility.FromJson<GlobalLeaderboardFileRoot>(existingJson);
+                        if (loaded != null && loaded.leaderboard != null)
+                        {
+                            root = loaded;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[LeaderboardManager] Failed reading existing leaderboard JSON: {ex.Message}");
+                }
+            }
+
+            TimeSpan runSpan = TimeSpan.FromSeconds(runTime);
+            string formattedRunTime = string.Format("{0:D2}:{1:D2}", (int)runSpan.TotalMinutes, runSpan.Seconds);
+            string currentDateTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+
+            GlobalLeaderboardRunItem newRun = new GlobalLeaderboardRunItem
+            {
+                playerName = playerName,
+                totalTimeSeconds = runTime,
+                formattedTime = formattedRunTime,
+                totalDeaths = runDeaths,
+                grade = runGrade,
+                dateTime = currentDateTime,
+                stages = new List<GlobalLeaderboardStageItem>()
+            };
+
+            if (levelStats != null)
+            {
+                foreach (var st in levelStats)
+                {
+                    TimeSpan stSpan = TimeSpan.FromSeconds(st.timeSeconds);
+                    newRun.stages.Add(new GlobalLeaderboardStageItem
+                    {
+                        levelName = st.levelName,
+                        timeSeconds = st.timeSeconds,
+                        formattedTime = string.Format("{0:D2}:{1:D2}", (int)stSpan.TotalMinutes, stSpan.Seconds),
+                        deaths = st.deaths
+                    });
+                }
+            }
+
+            if (root.leaderboard == null)
+            {
+                root.leaderboard = new List<GlobalLeaderboardRunItem>();
+            }
+
+            root.leaderboard.Add(newRun);
+
+            // Sort by total time ascending, then total deaths ascending
+            root.leaderboard.Sort((a, b) =>
+            {
+                int cmpTime = a.totalTimeSeconds.CompareTo(b.totalTimeSeconds);
+                if (cmpTime != 0) return cmpTime;
+                return a.totalDeaths.CompareTo(b.totalDeaths);
+            });
+
+            // Re-assign ranks 1..N
+            for (int i = 0; i < root.leaderboard.Count; i++)
+            {
+                root.leaderboard[i].rank = i + 1;
+            }
+
+            root.lastUpdated = currentDateTime;
+
+            string jsonOutput = JsonUtility.ToJson(root, true);
+            string parentDir = System.IO.Path.GetDirectoryName(filePath);
+            if (!string.IsNullOrEmpty(parentDir) && !System.IO.Directory.Exists(parentDir))
+            {
+                System.IO.Directory.CreateDirectory(parentDir);
+            }
+            System.IO.File.WriteAllText(filePath, jsonOutput, System.Text.Encoding.UTF8);
+            Debug.Log($"[LeaderboardManager] Successfully updated global leaderboard JSON at: {filePath}");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"[LeaderboardManager] Error saving global leaderboard JSON: {ex.Message}");
+        }
     }
 
     public List<LeaderboardEntry> GetTopEntries()

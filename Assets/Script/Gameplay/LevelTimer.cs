@@ -260,20 +260,6 @@ public class LevelTimer : NetworkBehaviour
         }
 
         UpdateTimerDisplay(GetRemainingTime());
-
-        if (IsTimeOver && mainMenuButton != null && mainMenuButton.gameObject.activeInHierarchy)
-        {
-            float rotZ = Mathf.Sin(Time.unscaledTime * 4.0f) * 2.0f;
-            mainMenuButton.transform.localRotation = Quaternion.Euler(0f, 0f, rotZ);
-
-            bool submitPressed = false;
-            if (UnityEngine.InputSystem.Keyboard.current != null && (UnityEngine.InputSystem.Keyboard.current.enterKey.wasPressedThisFrame || UnityEngine.InputSystem.Keyboard.current.numpadEnterKey.wasPressedThisFrame)) submitPressed = true;
-            if (UnityEngine.InputSystem.Gamepad.current != null && UnityEngine.InputSystem.Gamepad.current.buttonSouth.wasPressedThisFrame) submitPressed = true;
-            if (submitPressed && mainMenuButton.interactable)
-            {
-                OnMainMenuButtonClicked();
-            }
-        }
     }
 
     public void TriggerTimeOverFromMatchEnd()
@@ -487,9 +473,6 @@ public class LevelTimer : NetworkBehaviour
         {
             GameObject winUI = finishLine.GetWinPanelInScene();
             if (winUI != null) winUI.SetActive(false);
-
-            GameObject tilUI = finishLine.GetTimeIsLessPanelInScene();
-            if (tilUI != null) tilUI.SetActive(false);
         }
 
         if (timeOverPanel != null)
@@ -497,7 +480,7 @@ public class LevelTimer : NetworkBehaviour
             timeOverPanel.SetActive(true);
             timeOverPanel.transform.SetAsLastSibling();
 
-            // Populate Time Over UI Text Labels
+            // Set Title text if present, while leaving sub/prompt texts for RandomTextOnEnable
             TextMeshProUGUI[] tmps = timeOverPanel.GetComponentsInChildren<TextMeshProUGUI>(true);
             foreach (var t in tmps)
             {
@@ -506,27 +489,21 @@ public class LevelTimer : NetworkBehaviour
                 {
                     t.text = "STAGE TIMED OUT";
                 }
-                else if (n.Contains("prompt") || n.Contains("sub") || n.Contains("hint"))
-                {
-                    t.text = "PRESS [ENTER] / (A) TO RETURN";
-                }
             }
 
-            if (mainMenuButton == null)
+            // Deactivate and remove any Main Menu / interactive buttons on timeout panel
+            Button[] buttons = timeOverPanel.GetComponentsInChildren<Button>(true);
+            foreach (var btn in buttons)
             {
-                mainMenuButton = timeOverPanel.GetComponentInChildren<Button>(true);
+                if (btn != null)
+                {
+                    btn.gameObject.SetActive(false);
+                }
             }
 
             if (mainMenuButton != null)
             {
-                mainMenuButton.onClick.RemoveAllListeners();
-                mainMenuButton.onClick.AddListener(OnMainMenuButtonClicked);
-
-                if (UnityEngine.EventSystems.EventSystem.current != null)
-                {
-                    UnityEngine.EventSystems.EventSystem.current.SetSelectedGameObject(mainMenuButton.gameObject);
-                    mainMenuButton.Select();
-                }
+                mainMenuButton.gameObject.SetActive(false);
             }
         }
     }
