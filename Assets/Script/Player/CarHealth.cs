@@ -1,0 +1,995 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using Unity.Netcode;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
+using UnityEngine.UI;
+using TMPro;
+
+public class CarHealth : NetworkBehaviour
+{
+    [Header("Health Settings")]
+    [SerializeField] private int maxHealth = 100;
+    public NetworkVariable<int> currentHealth = new NetworkVariable<int>(100, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    public NetworkVariable<bool> isDead = new NetworkVariable<bool>(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    public NetworkVariable<int> deathCount = new NetworkVariable<int>(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+    [Header("Death Effects")]
+    [SerializeField] private GameObject smokeEffect;
+    [SerializeField] private GameObject holeDeathEffect;
+    [SerializeField] private GameObject trapDeathEffect;
+    [SerializeField] private AudioClip deathSound;
+    [SerializeField] private Vector3 deathPrefabOffset = Vector3.zero;
+
+    [Header("Death Camera Shake & Hit-Stop")]
+    [SerializeField] private float deathShakeDuration = 0.4f;
+    [SerializeField] private float deathShakeIntensity = 0.5f;
+    [SerializeField] private float hitStopDuration = 0.05f;
+    [SerializeField] private float hitStopTimeScale = 0.25f;
+
+    public bool isInvulnerableDuringSpawn { get => false; set { } } // Always false — no spawn invulnerability
+    public bool IsOverlappingHole => isOverlappingHole;
+
+    public event Action OnDeath;
+    public event Action OnRespawn;
+
+    private Rigidbody2D rb;
+    private SpriteRenderer spriteRenderer;
+    private Collider2D carCollider;
+    private NetworkCarController carController;
+    private Coroutine enableRestartCoroutine;
+    private Coroutine hitStopCoroutine;
+    private Coroutine delayedDeadUICoroutine;
+    private bool isOverlappingHole = false;
+    private bool localDeathRequested = false;
+    private bool deathResponseApplied = false;
+    private bool isRestartInteractable = false;
+    private float spawnGraceTimer = 0.6f;
+
+    // Exposed so NetworkCarController can stop driving the car the INSTANT the owner locally detects
+    // death, instead of waiting for the server's isDead NetworkVariable to round-trip back (that
+    // round-trip is exactly what made the client car "keep going for a few seconds" after falling in).
+    public bool LocalDeathRequested => localDeathRequested;
+
+    public static CarHealth LocalPlayerHealth { get; private set; }
+
+    private void Awake()
+    {
+        DontDestroyOnLoad(gameObject);
+        // Same guard as NetworkCarController: do not let a remote opponent's
+        // car steal the LocalPlayerHealth slot during Awake. The owner claims
+        // it in OnNetworkSpawn.
+        if (LocalPlayerHealth == null)
+        {
+            LocalPlayerHealth = this;
+        }
+        rb = GetComponent<Rigidbody2D>();
+        spriteRenderer = GetComponent<SpriteRenderer>();
+        carCollider = GetComponent<Collider2D>();
+        carController = GetComponent<NetworkCarController>();
+    }
+
+    public override void OnNetworkSpawn()
+    {
+        if (IsOwner)
+        {
+            LocalPlayerHealth = this;
+        }
+
+        currentHealth.OnValueChanged += OnHealthChanged;
+        isDead.OnValueChanged += OnDeadStateChanged;
+
+        ResetLocalSpawnState();
+
+        if (IsServer)
+        {
+            currentHealth.Value = maxHealth;
+            isDead.Value = false;
+            deathCount.Value = 0;
+        }
+
+        // Hide Dead UI initially
+        HideDeadUI();
+    }
+
+    public void ResetLocalSpawnState()
+    {
+        localDeathRequested = false;
+        deathResponseApplied = false;
+        isOverlappingHole = false;
+        spawnGraceTimer = 0.6f;
+        if (CameraFollow.Instance != null) CameraFollow.Instance.StopShake();
+        HandleRespawnVisuals();
+        HideDeadUI();
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        currentHealth.OnValueChanged -= OnHealthChanged;
+        isDead.OnValueChanged -= OnDeadStateChanged;
+        Time.timeScale = 1.0f;
+    }
+
+    private void OnEnable()
+    {
+        UnityEngine.SceneManagement.SceneManager.sceneLoaded += OnSceneLoadedHealth;
+    }
+
+    private void OnDisable()
+    {
+        UnityEngine.SceneManagement.SceneManager.sceneLoaded -= OnSceneLoadedHealth;
+        Time.timeScale = 1.0f;
+    }
+
+    private void OnSceneLoadedHealth(UnityEngine.SceneManagement.Scene scene, UnityEngine.SceneManagement.LoadSceneMode mode)
+    {
+        localLevelDeaths = 0;
+        if (IsServer)
+        {
+            deathCount.Value = 0;
+            currentHealth.Value = maxHealth;
+            isDead.Value = false;
+        }
+
+        ResetLocalSpawnState();
+    }
+
+    public override void OnDestroy()
+    {
+        base.OnDestroy();
+        Time.timeScale = 1.0f;
+    }
+
+    private void Update()
+    {
+        string activeScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+        if (activeScene.Equals("Ending", StringComparison.OrdinalIgnoreCase) || activeScene.Equals("MainMenu", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        if (isRestartInteractable && (isDead.Value || localDeathRequested))
+        {
+            // If GameButton is active on the dead canvas, GameButton handles navigation and Enter/buttonSouth submit.
+            // Only use this direct fallback if no active GameButton is managing the dead UI.
+            GameObject dPanel = GetDeadPanelInScene();
+            GameButton gameBtn = dPanel != null ? dPanel.GetComponentInChildren<GameButton>(true) : null;
+            if (gameBtn == null) gameBtn = UnityEngine.Object.FindFirstObjectByType<GameButton>();
+
+            if (gameBtn == null || !gameBtn.isActiveAndEnabled)
+            {
+                Gamepad gamepad = Gamepad.current ?? (Gamepad.all.Count > 0 ? Gamepad.all[0] : null);
+                bool retryPressed = (Keyboard.current != null && (Keyboard.current.enterKey.wasPressedThisFrame || Keyboard.current.numpadEnterKey.wasPressedThisFrame)) ||
+                                    (gamepad != null && gamepad.buttonSouth.wasPressedThisFrame);
+                if (retryPressed)
+                {
+                    OnRestartButtonClicked();
+                    return;
+                }
+            }
+        }
+
+        if (spawnGraceTimer > 0f)
+        {
+            spawnGraceTimer -= Time.deltaTime;
+            return;
+        }
+
+        if (!IsOwner && !IsLocalPlayer) return;
+        if (isDead.Value) return;
+        if (localDeathRequested) return;
+
+        CheckImmediateHoleOverlap();
+    }
+
+    private void OnHealthChanged(int previousValue, int newValue)
+    {
+        if (IsServer && newValue <= 0 && !isDead.Value)
+        {
+            DieServerAuthoritative();
+        }
+    }
+
+    private void OnDeadStateChanged(bool previousState, bool newState)
+    {
+        if (newState)
+        {
+            // Authoritative confirmation from the server. On the OWNER client this usually runs AFTER
+            // ApplyLocalDeathResponse() already fired from client-side prediction, so the guard inside
+            // makes it a no-op (no double camera shake / zoom / UI). On every OTHER peer (e.g. the host
+            // watching the client's car) this is the first time death is applied, so their copy of the
+            // car hides here too.
+            ApplyLocalDeathResponse();
+            OnDeath?.Invoke();
+        }
+        else
+        {
+            localDeathRequested = false;
+            deathResponseApplied = false;
+            HandleRespawnVisuals();
+            OnRespawn?.Invoke();
+            HideDeadUI();
+        }
+    }
+
+    public bool IsTrapObject(GameObject obj)
+    {
+        if (obj == null) return false;
+
+        Transform current = obj.transform;
+        while (current != null)
+        {
+            GameObject candidate = current.gameObject;
+            if (candidate.CompareTag("Trap")) return true;
+            string layerName = LayerMask.LayerToName(candidate.layer);
+            if (!string.IsNullOrEmpty(layerName) && string.Equals(layerName, "Trap", StringComparison.OrdinalIgnoreCase)) return true;
+            string n = candidate.name.ToLower();
+            if (n.Contains("trap") || n.Contains("saw") || n.Contains("spike") || n.Contains("blade") || n.Contains("hazard")) return true;
+            current = current.parent;
+        }
+
+        // Also check immediate children in case the collider is on the parent container
+        for (int i = 0; i < obj.transform.childCount; i++)
+        {
+            Transform child = obj.transform.GetChild(i);
+            if (child.CompareTag("Trap")) return true;
+            string layerName = LayerMask.LayerToName(child.gameObject.layer);
+            if (!string.IsNullOrEmpty(layerName) && string.Equals(layerName, "Trap", StringComparison.OrdinalIgnoreCase)) return true;
+            string n = child.name.ToLower();
+            if (n.Contains("trap") || n.Contains("saw") || n.Contains("spike") || n.Contains("blade") || n.Contains("hazard")) return true;
+        }
+
+        if (obj.TryGetComponent<Rigidbody2D>(out var rb) && rb.gameObject != obj)
+        {
+            return IsTrapObject(rb.gameObject);
+        }
+
+        return false;
+    }
+
+    public bool CheckAnyOverlappingTrap()
+    {
+        // 1. Direct collider overlap check
+        if (carCollider != null)
+        {
+            List<Collider2D> colHits = new List<Collider2D>();
+            ContactFilter2D filter = new ContactFilter2D { useTriggers = true, useLayerMask = false };
+            int count = carCollider.Overlap(filter, colHits);
+            for (int i = 0; i < count; i++)
+            {
+                if (colHits[i] != null && colHits[i].gameObject != gameObject && IsTrapObject(colHits[i].gameObject))
+                {
+                    return true;
+                }
+            }
+        }
+
+        Vector2 pos = transform.position;
+
+        // 2. Point overlap
+        Collider2D[] pointHits = Physics2D.OverlapPointAll(pos);
+        if (pointHits != null)
+        {
+            foreach (var hit in pointHits)
+            {
+                if (hit != null && hit.gameObject != gameObject && IsTrapObject(hit.gameObject)) return true;
+            }
+        }
+
+        // 3. Circle overlap
+        Collider2D[] circleHits = Physics2D.OverlapCircleAll(pos, 0.8f);
+        if (circleHits != null)
+        {
+            foreach (var hit in circleHits)
+            {
+                if (hit != null && hit.gameObject != gameObject && IsTrapObject(hit.gameObject)) return true;
+            }
+        }
+
+        // 4. Box bounds overlap
+        if (carCollider != null)
+        {
+            Collider2D[] boxHits = Physics2D.OverlapBoxAll(carCollider.bounds.center, carCollider.bounds.size * 1.3f, transform.eulerAngles.z);
+            if (boxHits != null)
+            {
+                foreach (var hit in boxHits)
+                {
+                    if (hit != null && hit.gameObject != gameObject && IsTrapObject(hit.gameObject)) return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private int localLevelDeaths = 0;
+    public int LocalLevelDeaths => localLevelDeaths;
+
+    public bool IsHoleObject(GameObject obj)
+    {
+        if (obj == null) return false;
+
+        // Explicitly exclude non-hazardous visual backgrounds
+        string objName = obj.name.ToLower();
+        if (objName.Contains("background") || objName.Contains("waterbackground"))
+        {
+            return false;
+        }
+
+        Transform current = obj.transform;
+        while (current != null)
+        {
+            GameObject candidate = current.gameObject;
+            string cName = candidate.name.ToLower();
+            if (cName.Contains("background") || cName.Contains("waterbackground"))
+            {
+                return false;
+            }
+
+            if (candidate.CompareTag("Hole")) return true;
+            string layerName = LayerMask.LayerToName(candidate.layer);
+            if (!string.IsNullOrEmpty(layerName) && (string.Equals(layerName, "Hole", StringComparison.OrdinalIgnoreCase) || string.Equals(layerName, "Water", StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+
+            // Only consider name matching if the candidate has an active Collider2D or is on a hazard layer
+            if (cName == "hole" || cName == "holes" || cName == "water" || cName.StartsWith("hole") || cName.StartsWith("water"))
+            {
+                if (candidate.GetComponent<Collider2D>() != null || candidate.layer == LayerMask.NameToLayer("Hole") || candidate.layer == LayerMask.NameToLayer("Water"))
+                {
+                    return true;
+                }
+            }
+
+            current = current.parent;
+        }
+
+        if (obj.TryGetComponent<Rigidbody2D>(out var rb) && rb.gameObject != obj)
+        {
+            return IsHoleObject(rb.gameObject);
+        }
+
+        return false;
+    }
+
+    private bool IsHoleOrTrapObject(GameObject obj)
+    {
+        return IsTrapObject(obj) || IsHoleObject(obj);
+    }
+
+    private void OnTriggerEnter2D(Collider2D other)
+    {
+        if (IsHoleOrTrapObject(other.gameObject))
+        {
+            isOverlappingHole = true;
+            CheckTrapOrHoleContact(other);
+        }
+    }
+
+    private void OnTriggerStay2D(Collider2D other)
+    {
+        if (IsHoleOrTrapObject(other.gameObject))
+        {
+            isOverlappingHole = true;
+            CheckTrapOrHoleContact(other);
+        }
+    }
+
+    private void OnTriggerExit2D(Collider2D other)
+    {
+        if (IsHoleOrTrapObject(other.gameObject))
+        {
+            isOverlappingHole = false;
+        }
+    }
+
+    private void OnCollisionEnter2D(Collision2D collision)
+    {
+        if (IsHoleOrTrapObject(collision.gameObject))
+        {
+            isOverlappingHole = true;
+            CheckTrapOrHoleContact(collision.collider);
+        }
+    }
+
+    private void OnCollisionStay2D(Collision2D collision)
+    {
+        if (IsHoleOrTrapObject(collision.gameObject))
+        {
+            isOverlappingHole = true;
+            CheckTrapOrHoleContact(collision.collider);
+        }
+    }
+
+    private void CheckTrapOrHoleContact(Collider2D other)
+    {
+        if (spawnGraceTimer > 0f) return;
+        if (!IsOwner && !IsLocalPlayer) return;
+        if (isDead.Value) return;
+        if (localDeathRequested) return;
+
+        if (carController == null) carController = GetComponent<NetworkCarController>();
+
+        // Check if jump duration has expired (time > jumpDuration)
+        bool jumpExpired = carController == null || !carController.IsJumping || carController.IsJumpDurationExpired;
+
+        if (jumpExpired)
+        {
+            localDeathRequested = true;
+
+            // Robust trap detection: check the collider's GameObject AND full hierarchy, AND sweep surroundings.
+            // If the car is touching ANY trap (even if contact was with a Hole/Water tile below the trap), TRAP TAKES PRIORITY!
+            bool isTrap = IsTrapObject(other?.gameObject) || CheckAnyOverlappingTrap();
+
+            RequestTakeDamageRpc(maxHealth);
+            PlayDeathEffectsRpc(transform.position, UnityEngine.SceneManagement.SceneManager.GetActiveScene().name, isTrap);
+            ApplyLocalDeathResponse(); // client-side prediction: stop, hide & show UI NOW; do not wait for isDead to round-trip
+        }
+    }
+
+    public void CheckImmediateHoleOverlap()
+    {
+        if (!IsOwner && !IsLocalPlayer) return;
+        if (isDead.Value) return;
+        if (localDeathRequested) return;
+
+        if (carController == null) carController = GetComponent<NetworkCarController>();
+
+        bool jumpExpired = carController == null || !carController.IsJumping || carController.IsJumpDurationExpired;
+
+        if (jumpExpired)
+        {
+            bool insideHoleOrTrap = false;
+
+            // 1. Direct collider overlap check (checks all layers & triggers with useTriggers = true)
+            if (carCollider != null)
+            {
+                ContactFilter2D filter = new ContactFilter2D();
+                filter.useTriggers = true; // MUST explicitly query trigger colliders!
+                filter.useLayerMask = false;
+
+                List<Collider2D> results = new List<Collider2D>();
+                int count = carCollider.Overlap(filter, results);
+
+                for (int i = 0; i < count; i++)
+                {
+                    Collider2D col = results[i];
+                    if (col != null && col.gameObject != gameObject && IsHoleOrTrapObject(col.gameObject))
+                    {
+                        insideHoleOrTrap = true;
+                        break;
+                    }
+                }
+            }
+
+            // 2. Point & Circle & Box 2D Overlap Queries
+            if (!insideHoleOrTrap)
+            {
+                Vector2 pos = transform.position;
+                Collider2D[] pointHits = Physics2D.OverlapPointAll(pos);
+                if (pointHits != null)
+                {
+                    foreach (Collider2D hit in pointHits)
+                    {
+                        if (hit != null && hit.gameObject != gameObject && IsHoleOrTrapObject(hit.gameObject))
+                        {
+                            insideHoleOrTrap = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (!insideHoleOrTrap)
+            {
+                Vector2 pos = transform.position;
+                Collider2D[] circleHits = Physics2D.OverlapCircleAll(pos, 0.4f);
+                if (circleHits != null)
+                {
+                    foreach (Collider2D hit in circleHits)
+                    {
+                        if (hit != null && hit.gameObject != gameObject && IsHoleOrTrapObject(hit.gameObject))
+                        {
+                            insideHoleOrTrap = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (!insideHoleOrTrap && carCollider != null)
+            {
+                Collider2D[] boundsHits = Physics2D.OverlapBoxAll(carCollider.bounds.center, carCollider.bounds.size, transform.eulerAngles.z);
+                if (boundsHits != null)
+                {
+                    foreach (Collider2D hit in boundsHits)
+                    {
+                        if (hit != null && hit.gameObject != gameObject && IsHoleOrTrapObject(hit.gameObject))
+                        {
+                            insideHoleOrTrap = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (insideHoleOrTrap)
+            {
+                isOverlappingHole = true;
+                localDeathRequested = true;
+                bool isTrap = CheckAnyOverlappingTrap();
+
+                RequestTakeDamageRpc(maxHealth);
+                PlayDeathEffectsRpc(transform.position, UnityEngine.SceneManagement.SceneManager.GetActiveScene().name, isTrap);
+                ApplyLocalDeathResponse(); // client-side prediction: stop, hide & show UI NOW; do not wait for isDead to round-trip
+            }
+        }
+    }
+
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+    public void RequestTakeDamageRpc(int amount)
+    {
+        TakeDamageServer(amount);
+    }
+
+    public void TakeDamageServer(int amount)
+    {
+        if (!IsServer) return;
+        if (isDead.Value) return;
+
+        DieServerAuthoritative();
+    }
+
+    private void DieServerAuthoritative()
+    {
+        if (!IsServer) return;
+
+        isDead.Value = true;
+        deathCount.Value++;
+    }
+
+    [Rpc(SendTo.Everyone, InvokePermission = RpcInvokePermission.Everyone)]
+    public void PlayDeathEffectsRpc(Vector3 deathPosition, Unity.Collections.FixedString32Bytes deathSceneName, bool isTrap = false)
+    {
+        string localScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+        if (!string.Equals(deathSceneName.ToString(), localScene, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        if (carController == null) carController = GetComponent<NetworkCarController>();
+        if (carController != null && !carController.IsInSameSceneAsLocalPlayer())
+        {
+            return;
+        }
+
+        Vector3 finalSpawnPosition = deathPosition + deathPrefabOffset;
+
+        GameObject effectPrefab = isTrap
+            ? (trapDeathEffect != null ? trapDeathEffect : Resources.Load<GameObject>("ExplosionEffect") ?? Resources.Load<GameObject>("DeathEffect") ?? smokeEffect)
+            : (holeDeathEffect != null ? holeDeathEffect : Resources.Load<GameObject>("SplashEffect") ?? smokeEffect);
+
+        if (effectPrefab != null)
+        {
+            GameObject fxObj = Instantiate(effectPrefab, finalSpawnPosition, Quaternion.identity);
+            
+            // Ensure death effect is rendered on top of everything
+            SpriteRenderer sr = fxObj.GetComponent<SpriteRenderer>() ?? fxObj.GetComponentInChildren<SpriteRenderer>();
+            if (sr != null)
+            {
+                sr.sortingLayerName = "Player";
+                sr.sortingOrder = 50;
+            }
+            Renderer[] rends = fxObj.GetComponentsInChildren<Renderer>(true);
+            foreach (var r in rends)
+            {
+                if (r != null)
+                {
+                    r.sortingLayerName = "Player";
+                    r.sortingOrder = 50;
+                }
+            }
+
+            StartCoroutine(AutoCleanEffectRoutine(fxObj));
+        }
+        else if (smokeEffect != null)
+        {
+            GameObject smokeObj = Instantiate(smokeEffect, finalSpawnPosition, Quaternion.identity);
+            Renderer[] rends = smokeObj.GetComponentsInChildren<Renderer>(true);
+            foreach (var r in rends)
+            {
+                if (r != null)
+                {
+                    r.sortingLayerName = "Player";
+                    r.sortingOrder = 50;
+                }
+            }
+            StartCoroutine(AutoCleanEffectRoutine(smokeObj));
+        }
+
+        if (deathSound != null)
+        {
+            float sfxVol = AudioManager.Instance != null ? AudioManager.Instance.GetSfxVolume() : 1.0f;
+            AudioSource.PlayClipAtPoint(deathSound, finalSpawnPosition, sfxVol);
+        }
+
+        if (DeathMarkerManager.Instance != null && (carController == null || carController.IsInSameSceneAsLocalPlayer()))
+        {
+            DeathMarkerManager.Instance.SpawnDeathMarker(finalSpawnPosition, OwnerClientId);
+        }
+    }
+
+    private IEnumerator AutoCleanEffectRoutine(GameObject effectObj, float maxTimeout = 2.5f)
+    {
+        if (effectObj == null) yield break;
+
+        Animator anim = effectObj.GetComponent<Animator>() ?? effectObj.GetComponentInChildren<Animator>();
+        ParticleSystem ps = effectObj.GetComponent<ParticleSystem>() ?? effectObj.GetComponentInChildren<ParticleSystem>();
+
+        float timer = 0f;
+        bool animStarted = false;
+
+        while (effectObj != null && timer < maxTimeout)
+        {
+            timer += Time.deltaTime;
+
+            if (anim != null && anim.isActiveAndEnabled)
+            {
+                AnimatorStateInfo info = anim.GetCurrentAnimatorStateInfo(0);
+                if (info.normalizedTime > 0.05f) animStarted = true;
+                if (animStarted && info.normalizedTime >= 1.0f) break;
+            }
+            else if (ps != null)
+            {
+                if (!ps.IsAlive(true) && timer > 0.1f) break;
+            }
+
+            yield return null;
+        }
+
+        if (effectObj != null)
+        {
+            Destroy(effectObj);
+        }
+    }
+
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+    public void RequestRespawnServerRpc()
+    {
+        if (!IsServer) return;
+
+        CarRespawn respawnComp = GetComponent<CarRespawn>();
+        if (respawnComp != null)
+        {
+            respawnComp.RespawnCarServer();
+        }
+
+        ResetHealthAndStateServer();
+    }
+
+    public void ResetHealthAndStateServer()
+    {
+        if (!IsServer) return;
+
+        currentHealth.Value = maxHealth;
+        isDead.Value = false;
+        isOverlappingHole = false;
+        localDeathRequested = false;
+        deathResponseApplied = false;
+        spawnGraceTimer = 0.6f;
+
+        if (carController == null) carController = GetComponent<NetworkCarController>();
+        if (carController != null)
+        {
+            carController.UpdateVisibilityBasedOnScene();
+        }
+        else
+        {
+            if (carCollider != null) carCollider.enabled = true;
+            if (spriteRenderer != null) spriteRenderer.enabled = true;
+        }
+
+        ResetHealthAndStateClientRpc();
+    }
+
+    [Rpc(SendTo.Everyone, InvokePermission = RpcInvokePermission.Everyone)]
+    public void ResetHealthAndStateClientRpc()
+    {
+        ResetLocalSpawnState();
+    }
+
+    // Applies the LOCAL death response exactly once: stop & hide the car (HandleDeathVisuals) and show
+    // the Game Over UI (ShowDeadUI, which is owner-guarded internally). Called from two places:
+    //   1. Client-side prediction, the instant the OWNER detects a hole/trap  -> immediate feedback.
+    //   2. OnDeadStateChanged, when the server's authoritative isDead syncs   -> covers non-owner peers,
+    //      and is a harmless no-op on the owner because prediction already ran.
+    // The deathResponseApplied guard makes it idempotent, so camera shake/zoom and the UI animation are
+    // never triggered twice for a single death. It is reset to false on respawn (OnDeadStateChanged=false).
+    private void ApplyLocalDeathResponse()
+    {
+        if (deathResponseApplied) return;
+        deathResponseApplied = true;
+
+        if (IsOwner)
+        {
+            localLevelDeaths++;
+            if (hitStopCoroutine != null) StopCoroutine(hitStopCoroutine);
+            hitStopCoroutine = StartCoroutine(HitStopRoutine(hitStopDuration, hitStopTimeScale));
+        }
+
+        HandleDeathVisuals();
+
+        if (IsOwner)
+        {
+            if (delayedDeadUICoroutine != null) StopCoroutine(delayedDeadUICoroutine);
+            delayedDeadUICoroutine = StartCoroutine(DelayedShowDeadUIRoutine(0.45f));
+        }
+    }
+
+    private IEnumerator DelayedShowDeadUIRoutine(float delay)
+    {
+        yield return new WaitForSecondsRealtime(delay);
+        ShowDeadUI();
+        delayedDeadUICoroutine = null;
+    }
+
+    private IEnumerator HitStopRoutine(float duration, float slowScale)
+    {
+        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening)
+        {
+            Time.timeScale = slowScale;
+            yield return new WaitForSecondsRealtime(duration);
+            Time.timeScale = 1.0f;
+        }
+        hitStopCoroutine = null;
+    }
+
+    private void HandleDeathVisuals()
+    {
+        isOverlappingHole = false;
+        if (carCollider != null) carCollider.enabled = false;
+        if (rb != null)
+        {
+            rb.linearVelocity = Vector2.zero;
+            rb.angularVelocity = 0f;
+        }
+        if (spriteRenderer != null) spriteRenderer.enabled = false;
+
+        GetComponent<CarBloodStainReceiver>()?.ClearAllStains();
+
+        if (IsOwner)
+        {
+            CameraFollow camFollow = CameraFollow.Instance != null ? CameraFollow.Instance : (Camera.main != null ? Camera.main.GetComponent<CameraFollow>() : null);
+            if (camFollow != null)
+            {
+                camFollow.TriggerShake(deathShakeDuration, deathShakeIntensity);
+            }
+
+            CameraZoom2D camZoom = Camera.main != null ? Camera.main.GetComponent<CameraZoom2D>() : null;
+            if (camZoom != null)
+            {
+                camZoom.StartZoom(transform);
+            }
+        }
+    }
+
+    private void HandleRespawnVisuals()
+    {
+        isOverlappingHole = false;
+        GetComponent<CarBloodStainReceiver>()?.ClearAllStains();
+
+        if (carController == null) carController = GetComponent<NetworkCarController>();
+        if (carController != null)
+        {
+            carController.UpdateVisibilityBasedOnScene();
+        }
+        else
+        {
+            if (carCollider != null) carCollider.enabled = true;
+            if (spriteRenderer != null) spriteRenderer.enabled = true;
+        }
+
+        if (IsOwner)
+        {
+            if (CameraFollow.Instance != null) CameraFollow.Instance.StopShake();
+            CameraZoom2D camZoom = Camera.main != null ? Camera.main.GetComponent<CameraZoom2D>() : null;
+            if (camZoom != null)
+            {
+                camZoom.ResetZoom();
+            }
+        }
+    }
+
+    private GameObject cachedDeadPanel;
+
+    private GameObject GetDeadPanelInScene()
+    {
+        if (cachedDeadPanel != null && cachedDeadPanel.scene.isLoaded)
+        {
+            return cachedDeadPanel;
+        }
+
+        GameObject tagged = GameObject.FindGameObjectWithTag("Dead");
+        if (tagged != null)
+        {
+            cachedDeadPanel = tagged;
+            return cachedDeadPanel;
+        }
+
+        Canvas[] canvases = UnityEngine.Object.FindObjectsByType<Canvas>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        foreach (var canvas in canvases)
+        {
+            foreach (Transform child in canvas.transform)
+            {
+                string n = child.name.ToLower();
+                if (child.CompareTag("Dead") || n.Contains("dead") || n.Contains("gameover") || n.Contains("death"))
+                {
+                    cachedDeadPanel = child.gameObject;
+                    return cachedDeadPanel;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private void ShowDeadUI()
+    {
+        if (!IsOwner) return;
+
+        GameObject deadPanel = GetDeadPanelInScene();
+        if (deadPanel != null)
+        {
+            deadPanel.SetActive(true);
+
+            // Populate Death UI labels
+            int currentAttempts = deathCount.Value + 1;
+            TextMeshProUGUI[] tmps = deadPanel.GetComponentsInChildren<TextMeshProUGUI>(true);
+            foreach (var t in tmps)
+            {
+                string n = t.gameObject.name.ToLower();
+                if (n.Contains("attempt") || n.Contains("count") || n.Contains("death"))
+                {
+                    t.text = $"ATTEMPTS: {currentAttempts}";
+                }
+                else if (n.Contains("prompt") || n.Contains("hint") || n.Contains("retry"))
+                {
+                    t.text = "PRESS [ENTER] / (A) TO RETRY";
+                }
+            }
+
+            Text[] legacyTexts = deadPanel.GetComponentsInChildren<Text>(true);
+            foreach (var t in legacyTexts)
+            {
+                string n = t.gameObject.name.ToLower();
+                if (n.Contains("attempt") || n.Contains("count") || n.Contains("death"))
+                {
+                    t.text = $"ATTEMPTS: {currentAttempts}";
+                }
+                else if (n.Contains("prompt") || n.Contains("hint") || n.Contains("retry"))
+                {
+                    t.text = "PRESS [ENTER] / (A) TO RETRY";
+                }
+            }
+
+            isRestartInteractable = true;
+
+            Button[] buttons = deadPanel.GetComponentsInChildren<Button>(true);
+            foreach (var btn in buttons)
+            {
+                if (btn == null) continue;
+                btn.interactable = true;
+                string btnName = btn.gameObject.name.ToLower();
+                if (btnName.Contains("menu") || btnName.Contains("main") || btnName.Contains("exit") || btnName.Contains("quit"))
+                {
+                    btn.onClick.RemoveAllListeners();
+                    btn.onClick.AddListener(OnMainMenuButtonClicked);
+                }
+                else
+                {
+                    btn.onClick.RemoveAllListeners();
+                    btn.onClick.AddListener(OnRestartButtonClicked);
+                }
+            }
+
+            Button firstBtn = deadPanel.GetComponentInChildren<Button>(true);
+            if (firstBtn != null && EventSystem.current != null)
+            {
+                EventSystem.current.SetSelectedGameObject(firstBtn.gameObject);
+                firstBtn.Select();
+            }
+        }
+    }
+
+    private void HideDeadUI()
+    {
+        if (!IsOwner) return;
+
+        isRestartInteractable = false;
+
+        if (delayedDeadUICoroutine != null)
+        {
+            StopCoroutine(delayedDeadUICoroutine);
+            delayedDeadUICoroutine = null;
+        }
+
+        if (hitStopCoroutine != null)
+        {
+            StopCoroutine(hitStopCoroutine);
+            hitStopCoroutine = null;
+            Time.timeScale = 1.0f;
+        }
+
+        if (enableRestartCoroutine != null)
+        {
+            StopCoroutine(enableRestartCoroutine);
+            enableRestartCoroutine = null;
+        }
+
+        GameObject deadPanel = GetDeadPanelInScene();
+        if (deadPanel != null)
+        {
+            deadPanel.SetActive(false);
+        }
+    }
+
+    public void OnMainMenuButtonClicked()
+    {
+        Time.timeScale = 1.0f;
+        if (RelayManager.Instance != null)
+        {
+            RelayManager.Instance.ShutdownSession();
+        }
+
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        {
+            NetworkManager.Singleton.Shutdown();
+        }
+
+        if (SceneTransitionManager.Instance != null)
+        {
+            SceneTransitionManager.Instance.LoadSceneWithTransition("MainMenu");
+        }
+        else
+        {
+            UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenu");
+        }
+    }
+
+    private void OnRestartButtonClicked()
+    {
+        if (!IsOwner && !IsLocalPlayer) return;
+        if (!isDead.Value && !localDeathRequested) return; // Prevent double clicks / re-triggering
+
+        localDeathRequested = false;
+        deathResponseApplied = false;
+        spawnGraceTimer = 0.6f;
+        if (CameraFollow.Instance != null) CameraFollow.Instance.StopShake();
+        HideDeadUI();
+        HandleRespawnVisuals();
+
+        CarRespawn respawnComp = GetComponent<CarRespawn>();
+        if (respawnComp != null)
+        {
+            respawnComp.RespawnCarLocal();
+        }
+
+        if (carController == null) carController = GetComponent<NetworkCarController>();
+        if (carController != null)
+        {
+            carController.ResetCarBoostStateLocal();
+        }
+
+        if (IsSpawned && NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        {
+            RequestRespawnServerRpc();
+        }
+        else if (IsServer)
+        {
+            ResetHealthAndStateServer();
+        }
+    }
+}
