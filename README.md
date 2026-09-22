@@ -67,13 +67,13 @@
 
 | Action | Primary Keyboard | Secondary / Alternative | Gamepad (Xbox / DualShock) |
 | :--- | :--- | :--- | :--- |
-| **Accelerate / Forward** | `W` | `Up Arrow` | `Right Trigger (RT / R2)` or `Left Stick Up` |
-| **Brake / Reverse** | `S` | `Down Arrow` | `Left Trigger (LT / L2)` or `Left Stick Down` |
+| **Steer Up** | `W` | `Up Arrow` | `Left Stick Up` |
+| **Steer Down** | `S` | `Down Arrow` | `Left Stick Down` |
 | **Steer Left** | `A` | `Left Arrow` | `Left Stick Left` / `D-Pad Left` |
 | **Steer Right** | `D` | `Right Arrow` | `Left Stick Right` / `D-Pad Right` |
-| **Handbrake / Drift** | `Space` | `Left Shift` | `Button South (A / Cross)` |
-| **Jump Pad / Special** | `Space` *(on ramp)* | `E` | `Button West (X / Square)` |
-| **Pause / Menu** | `Escape` | `P` | `Start / Options` |
+| **Engine Start** | `Space` | `None` | `Button South (A / Cross)` |
+| **Jump Pad / UI button click** | `Space` *(on ground endings)* | `None` | `Button South (A / Cross)` |
+| **Leaderboard** | `Tab` | `L` | `Button East (X / Square)` |
 
 ---
 
@@ -125,58 +125,8 @@ The repository includes a standalone web app in the [`Website/`](./Website/) fol
 
 ## 🚀 Deploying the Leaderboard Website
 
-The [drift-it.vercel.app](./Website/) directory is fully static (HTML, CSS, Vanilla JS) with zero build steps required. You can deploy it in seconds using any of the following methods:
-
-### Option 1: Deploy to Vercel (Recommended)
-
-#### A. Via Vercel Web Dashboard (1-Click Import)
-1. Go to [vercel.com/new](https://vercel.com/new).
-2. Import the **`Aadir0/DriftIT`** repository.
-3. In **Project Settings**:
-   - The included [`vercel.json`](./vercel.json) will automatically route traffic to the `Website/` folder.
-   - *(Optional)* Set **Root Directory** to `Website` if you prefer.
-4. Click **Deploy**. Your site will be live on `https://your-project.vercel.app`!
-
-#### B. Via Vercel CLI
-```bash
-# Install Vercel CLI if needed
-npm install -g vercel
-
-# Deploy from repository root
-vercel --prod
-```
-
----
-
-### Option 2: Deploy to GitHub Pages (Automated)
-
-This repository includes a GitHub Actions workflow [`.github/workflows/deploy-pages.yml`](./.github/workflows/deploy-pages.yml).
-
-1. Push your repository to GitHub (`main` branch).
-2. Go to **Settings > Pages** in your GitHub repository.
-3. Under **Build and deployment > Source**, select **GitHub Actions**.
-4. The workflow will automatically deploy the site on every push to `https://<your-username>.github.io/DriftIT/`.
-
----
-
-### Option 3: Deploy to Netlify
-
-- **Method A (Drag & Drop)**: Drag and drop the `Website/` folder into [app.netlify.com/drop](https://app.netlify.com/drop).
-- **Method B (Git Connected)**: Connect the repository in Netlify, set **Base directory** to `Website`, and leave the build command blank.
-
----
-
-### Option 4: Run Locally
-
-#### Using Python:
-```bash
-cd Website
-python -m http.server 8000
-```
-Open [http://localhost:8000](http://localhost:8000) in your browser.
-
-#### Using VS Code:
-Right-click `Website/index.html` and select **Open with Live Server**.
+The [Website](./Website/) directory is fully static (HTML, CSS, Vanilla JS) with zero build steps required.
+Deployed to Vercel on the [Site](https://drift-it.vercel.app/) .
 
 ---
 
