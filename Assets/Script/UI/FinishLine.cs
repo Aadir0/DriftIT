@@ -549,7 +549,8 @@ public class FinishLine : MonoBehaviour
             {
                 if (NetworkRaceManager.Instance != null && NetworkRaceManager.Instance.IsSpawned)
                 {
-                    NetworkRaceManager.Instance.NotifyPlayerReachedEndingRpc(localId);
+                    Unity.Collections.FixedString32Bytes pName = new Unity.Collections.FixedString32Bytes(LeaderboardManager.LocalPlayerName);
+                    NetworkRaceManager.Instance.NotifyPlayerReachedEndingRpc(localId, pName);
                 }
             }
 

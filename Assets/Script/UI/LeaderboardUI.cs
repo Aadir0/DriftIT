@@ -55,21 +55,40 @@ public class LeaderboardUI : MonoBehaviour
 
     private void Start()
     {
+        bool isMultiplayer = NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening;
+        ulong localClientId = isMultiplayer ? NetworkManager.Singleton.LocalClientId : 0;
+
+        bool isWinner = true;
+        if (isMultiplayer && NetworkRaceManager.Instance != null && NetworkRaceManager.Instance.IsSpawned)
+        {
+            ulong winnerId = NetworkRaceManager.Instance.winnerClientId.Value;
+            if (winnerId != 9999 && winnerId != localClientId)
+            {
+                isWinner = false;
+            }
+        }
+
         if (LeaderboardManager.Instance != null)
         {
             LeaderboardManager.Instance.EnsureAllLevelsRecorded();
-            string savedName = PlayerPrefs.GetString("PlayerName", "Player");
-            LeaderboardManager.Instance.SaveCurrentRun(savedName);
+            if (isWinner && LeaderboardManager.Instance.TotalRunTimeouts == 0)
+            {
+                string savedName = LeaderboardManager.LocalPlayerName;
+                LeaderboardManager.Instance.SaveCurrentRun(savedName);
+            }
         }
 
-        ulong localClientId = (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening) ? NetworkManager.Singleton.LocalClientId : 0;
-        if (NetworkCarController.LocalPlayerInstance != null && NetworkCarController.LocalPlayerInstance.IsSpawned && NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        if (isMultiplayer && isWinner)
         {
-            NetworkCarController.LocalPlayerInstance.NotifyMatchEndedRpc(localClientId);
-        }
-        if (NetworkRaceManager.Instance != null && NetworkRaceManager.Instance.IsSpawned && NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
-        {
-            NetworkRaceManager.Instance.NotifyPlayerReachedEndingRpc(localClientId);
+            Unity.Collections.FixedString32Bytes pName = new Unity.Collections.FixedString32Bytes(LeaderboardManager.LocalPlayerName);
+            if (NetworkCarController.LocalPlayerInstance != null && NetworkCarController.LocalPlayerInstance.IsSpawned)
+            {
+                NetworkCarController.LocalPlayerInstance.NotifyMatchEndedRpc(localClientId);
+            }
+            if (NetworkRaceManager.Instance != null && NetworkRaceManager.Instance.IsSpawned)
+            {
+                NetworkRaceManager.Instance.NotifyPlayerReachedEndingRpc(localClientId, pName);
+            }
         }
 
         SetupUIReferences();

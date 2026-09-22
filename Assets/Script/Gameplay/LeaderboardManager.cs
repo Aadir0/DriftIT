@@ -95,6 +95,28 @@ public class LeaderboardManager : MonoBehaviour
     private LeaderboardDataWrapper leaderboardData = new LeaderboardDataWrapper();
     private bool hasSavedCurrentRun = false;
 
+    private static string _localPlayerName = null;
+    public static string LocalPlayerName
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(_localPlayerName))
+            {
+                _localPlayerName = PlayerPrefs.GetString("PlayerName", "Player");
+            }
+            return _localPlayerName;
+        }
+        set
+        {
+            _localPlayerName = value;
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                PlayerPrefs.SetString("PlayerName", value);
+                PlayerPrefs.Save();
+            }
+        }
+    }
+
     public float TotalRunTime => totalRunTime;
     public int TotalRunDeaths => totalRunDeaths;
     public int TotalRunTimeouts => totalRunTimeouts;
@@ -280,7 +302,7 @@ public class LeaderboardManager : MonoBehaviour
 
         if (string.IsNullOrWhiteSpace(playerName) || playerName == "Player 1")
         {
-            playerName = PlayerPrefs.GetString("PlayerName", "Player");
+            playerName = LocalPlayerName;
         }
         if (string.IsNullOrWhiteSpace(playerName))
         {

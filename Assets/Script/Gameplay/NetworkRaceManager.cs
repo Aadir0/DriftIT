@@ -23,6 +23,11 @@ public class NetworkRaceManager : NetworkBehaviour
     public NetworkVariable<RaceState> currentRaceState = new NetworkVariable<RaceState>(RaceState.LobbyWaiting);
     public NetworkVariable<float> countdownTimer = new NetworkVariable<float>(3f);
     public NetworkVariable<ulong> winnerClientId = new NetworkVariable<ulong>(9999);
+    public NetworkVariable<Unity.Collections.FixedString32Bytes> winnerPlayerName = new NetworkVariable<Unity.Collections.FixedString32Bytes>(
+        string.Empty,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
     public NetworkVariable<int> connectedPlayerCount = new NetworkVariable<int>(1, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
     public NetworkVariable<int> readyPlayerCount = new NetworkVariable<int>(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
@@ -100,6 +105,7 @@ public class NetworkRaceManager : NetworkBehaviour
             readyPlayerCount.Value = 0;
             currentRaceState.Value = RaceState.LobbyWaiting;
             winnerClientId.Value = 9999;
+            winnerPlayerName.Value = string.Empty;
         }
     }
 
@@ -177,8 +183,17 @@ public class NetworkRaceManager : NetworkBehaviour
     }
 
     [Rpc(SendTo.Everyone, InvokePermission = RpcInvokePermission.Everyone)]
-    public void NotifyPlayerReachedEndingRpc(ulong clientId)
+    public void NotifyPlayerReachedEndingRpc(ulong clientId, Unity.Collections.FixedString32Bytes playerName = default)
     {
+        if (IsServer)
+        {
+            if (winnerClientId.Value == 9999)
+            {
+                winnerClientId.Value = clientId;
+                winnerPlayerName.Value = playerName;
+            }
+        }
+
         if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && NetworkManager.Singleton.LocalClientId == clientId)
         {
             return;

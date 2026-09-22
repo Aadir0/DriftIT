@@ -337,6 +337,7 @@ public class JustAButton : MonoBehaviour
     {
         string name = nameInputField != null ? nameInputField.text.Trim() : "Player";
         if (string.IsNullOrEmpty(name)) name = "Player";
+        LeaderboardManager.LocalPlayerName = name;
         PlayerPrefs.SetString("PlayerName", name);
         PlayerPrefs.Save();
 

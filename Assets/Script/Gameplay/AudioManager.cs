@@ -33,20 +33,7 @@ public class AudioManager : MonoBehaviour
 
         musicAudioSource = GetComponent<AudioSource>();
 
-#if UNITY_WEBGL && !UNITY_EDITOR
-    [System.Runtime.InteropServices.DllImport("__Internal")]
-    private static extern void UnlockWebAudioContext();
-#endif
-
-    private void Start()
-    {
-#if UNITY_WEBGL && !UNITY_EDITOR
-        try
-        {
-            UnlockWebAudioContext();
-        }
-        catch { }
-#endif
+        LoadVolume();
     }
 
     public void SetMusicVolume(float volume)

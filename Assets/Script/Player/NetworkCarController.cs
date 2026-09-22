@@ -132,6 +132,13 @@ public class NetworkCarController : NetworkBehaviour
         NetworkVariableWritePermission.Server
     );
 
+    // Networked driver player name
+    public NetworkVariable<Unity.Collections.FixedString32Bytes> playerNameNet = new NetworkVariable<Unity.Collections.FixedString32Bytes>(
+        string.Empty,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
     // Networked scene name for independent level progression visibility
     public NetworkVariable<Unity.Collections.FixedString32Bytes> currentSceneNet = new NetworkVariable<Unity.Collections.FixedString32Bytes>(
         string.Empty,
@@ -179,15 +186,6 @@ public class NetworkCarController : NetworkBehaviour
     private void Awake()
     {
         DontDestroyOnLoad(gameObject);
-        // Only claim the local-player slot if it is still empty. Every spawned
-        // car (including the remote opponent's ghost on this peer) runs Awake,
-        // so unconditional assignment let the opponent steal LocalPlayerInstance
-        // and the camera could latch onto the wrong car. Ownership is resolved
-        // properly in OnNetworkSpawn.
-        if (LocalPlayerInstance == null)
-        {
-            LocalPlayerInstance = this;
-        }
         rb = GetComponent<Rigidbody2D>();
         spriteRenderer = GetComponent<SpriteRenderer>();
         boxCollider = GetComponent<CapsuleCollider2D>();
@@ -297,6 +295,15 @@ public class NetworkCarController : NetworkBehaviour
         if (IsOwner || IsLocalPlayer)
         {
             LocalPlayerInstance = this;
+            string myName = LeaderboardManager.LocalPlayerName;
+            if (IsServer)
+            {
+                playerNameNet.Value = new Unity.Collections.FixedString32Bytes(myName);
+            }
+            else if (IsSpawned && NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+            {
+                SetPlayerNameServerRpc(new Unity.Collections.FixedString32Bytes(myName));
+            }
         }
         canJump = false;
         isJumping = false;
@@ -598,7 +605,18 @@ public class NetworkCarController : NetworkBehaviour
             DisableInput(JumpInput);
         }
 
+        if (LocalPlayerInstance == this)
+        {
+            LocalPlayerInstance = null;
+        }
+
         StopCarAudio();
+    }
+
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+    public void SetPlayerNameServerRpc(Unity.Collections.FixedString32Bytes name)
+    {
+        playerNameNet.Value = name;
     }
 
     private void OnCurrentSceneChanged(Unity.Collections.FixedString32Bytes previousState, Unity.Collections.FixedString32Bytes newState)
@@ -1695,6 +1713,10 @@ public static void UpdateAllCarsSceneVisibility()
     public override void OnDestroy()
     {
         base.OnDestroy();
+        if (LocalPlayerInstance == this)
+        {
+            LocalPlayerInstance = null;
+        }
         fallbackMoveAction?.Dispose();
         fallbackJumpAction?.Dispose();
         StopCarAudio();
