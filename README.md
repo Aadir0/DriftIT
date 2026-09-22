@@ -67,13 +67,13 @@
 
 | Action | Primary Keyboard | Secondary / Alternative | Gamepad (Xbox / DualShock) |
 | :--- | :--- | :--- | :--- |
-| **Accelerate / Forward** | `W` | `Up Arrow` | `Right Trigger (RT / R2)` or `Left Stick Up` |
-| **Brake / Reverse** | `S` | `Down Arrow` | `Left Trigger (LT / L2)` or `Left Stick Down` |
+| **Steer Up** | `W` | `Up Arrow` | `Left Stick Up` |
+| **Steer Down** | `S` | `Down Arrow` | `Left Stick Down` |
 | **Steer Left** | `A` | `Left Arrow` | `Left Stick Left` / `D-Pad Left` |
 | **Steer Right** | `D` | `Right Arrow` | `Left Stick Right` / `D-Pad Right` |
-| **Handbrake / Drift** | `Space` | `Left Shift` | `Button South (A / Cross)` |
-| **Jump Pad / Special** | `Space` *(on ramp)* | `E` | `Button West (X / Square)` |
-| **Pause / Menu** | `Escape` | `P` | `Start / Options` |
+| **Engine Start** | `Space` | `None` | `Button South (A / Cross)` |
+| **Jump Pad / UI button click** | `Space` *(on ground endings)* | `None` | `Button South (A / Cross)` |
+| **Leaderboard** | `Tab` | `L` | `Button East (X / Square)` |
 
 ---
 
