@@ -159,6 +159,29 @@ public class NetworkCarController : NetworkBehaviour
     private bool isBoosted = false; // Represents whether car movement has started
     public bool hasWonPlayer { get; private set; } = false;
     public static NetworkCarController LocalPlayerInstance { get; private set; }
+    private bool isMovementFrozen = false;
+    private bool isCurrentlyDrifting = false;
+    private float driftCooldownTimer = 0f;
+
+    public void FreezeMovement(bool freeze = true)
+    {
+        isMovementFrozen = freeze;
+        if (freeze && rb != null)
+        {
+            rb.linearVelocity = Vector2.zero;
+            rb.angularVelocity = 0f;
+        }
+    }
+
+    public void SetCarSprite(Sprite newSprite)
+    {
+        if (newSprite == null) return;
+        if (spriteRenderer == null) spriteRenderer = GetComponent<SpriteRenderer>();
+        if (spriteRenderer != null)
+        {
+            spriteRenderer.sprite = newSprite;
+        }
+    }
 
     private InputAction MoveInput => moveAction != null ? moveAction.action : fallbackMoveAction;
     private InputAction JumpInput => JumpAction != null ? JumpAction.action : fallbackJumpAction;
@@ -1206,7 +1229,7 @@ public static void UpdateAllCarsSceneVisibility()
             return;
         }
 
-        if (hasWonPlayer) return;
+        if (hasWonPlayer || isMovementFrozen) return;
         if (healthComp != null && (healthComp.isDead.Value || healthComp.LocalDeathRequested))
         {
             StopCarAudio();
@@ -1258,6 +1281,7 @@ public static void UpdateAllCarsSceneVisibility()
     private void HandleActionPressed()
     {
         if (!IsOwner && !IsLocalPlayer) return;
+        if (isMovementFrozen) return;
         ApplyLevelJumpSettings();
 
         if (Time.frameCount == lastActionFrame) return;
@@ -1305,7 +1329,8 @@ public static void UpdateAllCarsSceneVisibility()
     private void TryExecuteJump()
     {
         if (!IsOwner && !IsLocalPlayer) return;
-        if (!isBoosted || (healthComp != null && (healthComp.isDead.Value || healthComp.LocalDeathRequested)) || hasWonPlayer) return;
+        if (!isBoosted || hasWonPlayer || isMovementFrozen) return;
+        if (healthComp != null && (healthComp.isDead.Value || healthComp.LocalDeathRequested)) return;
         if (LevelTimer.Instance != null && LevelTimer.Instance.IsTimeOver) return;
 
         if (isJumping) return;
@@ -1342,6 +1367,16 @@ public static void UpdateAllCarsSceneVisibility()
 
         if (!IsOwner && !IsLocalPlayer) return;
         if (hasWonPlayer) return;
+        if (isMovementFrozen)
+        {
+            if (rb != null)
+            {
+                rb.linearVelocity = Vector2.zero;
+                rb.angularVelocity = 0f;
+            }
+            StopCarAudio();
+            return;
+        }
         if (healthComp != null && (healthComp.isDead.Value || healthComp.LocalDeathRequested))
         {
             StopCarAudio();
@@ -1690,7 +1725,7 @@ public static void UpdateAllCarsSceneVisibility()
 
     private void UpdateTyreMarks(float turn)
     {
-        if (isJumping || (boxCollider != null && boxCollider.gameObject.layer == jumpCollisionLayer)) return;
+        if (isJumping || (boxCollider != null && boxCollider.gameObject.layer == jumpCollisionLayer) || isMovementFrozen) return;
         if (isTouchingBoundary || boundaryDriftTimer > 0f) return;
 
         if (Mathf.Abs(turn) < 0.35f) return;
@@ -1698,7 +1733,26 @@ public static void UpdateAllCarsSceneVisibility()
         float sidewaysVelocity = GetSidewaysVelocity();
         float currentDriftThreshold = driftThreshold;
 
-        if (Mathf.Abs(sidewaysVelocity) < currentDriftThreshold) return;
+        bool isDriftingNow = Mathf.Abs(sidewaysVelocity) >= currentDriftThreshold && isBoosted && !hasWonPlayer && (IsOwner || IsLocalPlayer);
+        if (isDriftingNow)
+        {
+            driftCooldownTimer = 0.25f;
+            if (!isCurrentlyDrifting)
+            {
+                isCurrentlyDrifting = true;
+                EasterStatsTracker.RegisterDrift();
+            }
+        }
+        else if (isCurrentlyDrifting)
+        {
+            driftCooldownTimer -= Time.fixedDeltaTime;
+            if (driftCooldownTimer <= 0f)
+            {
+                isCurrentlyDrifting = false;
+            }
+        }
+
+        if (!isDriftingNow) return;
 
         UpdateTyreMark(frontLeftTyre, ref lastFrontLeftPosition, ref frontLeftDistance);
         UpdateTyreMark(frontRightTyre, ref lastFrontRightPosition, ref frontRightDistance);

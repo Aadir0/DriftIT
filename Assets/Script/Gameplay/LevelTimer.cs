@@ -105,6 +105,7 @@ public class LevelTimer : NetworkBehaviour
         offlineIsTimeOver = false;
         hasInitializedRun = true;
         timerRunning = true;
+        Easter.ResetEasterState();
 
         if (IsNetworkActive && IsServer)
         {

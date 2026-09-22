@@ -269,4 +269,34 @@ public class CloudLeaderboardService : MonoBehaviour
 
         return result;
     }
+
+    /// <summary>
+    /// Asynchronously wipes all runs from the cloud database.
+    /// </summary>
+    public void ClearCloudLeaderboard(Action<bool, string> onComplete = null)
+    {
+        StartCoroutine(ClearCloudLeaderboardRoutine(onComplete));
+    }
+
+    private IEnumerator ClearCloudLeaderboardRoutine(Action<bool, string> onComplete)
+    {
+        string targetUrl = BuildCollectionUrl();
+
+        using (UnityWebRequest req = UnityWebRequest.Delete(targetUrl))
+        {
+            req.timeout = Mathf.RoundToInt(requestTimeoutSeconds);
+            yield return req.SendWebRequest();
+
+            if (req.result == UnityWebRequest.Result.Success)
+            {
+                Debug.Log($"[CloudLeaderboard] Cloud database wiped successfully at: {targetUrl}");
+                onComplete?.Invoke(true, "Cloud leaderboard cleared.");
+            }
+            else
+            {
+                Debug.LogWarning($"[CloudLeaderboard] Failed to clear cloud leaderboard ({req.responseCode}): {req.error}");
+                onComplete?.Invoke(false, req.error);
+            }
+        }
+    }
 }

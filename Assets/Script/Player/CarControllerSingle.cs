@@ -130,6 +130,29 @@ public class CarControllerSingle : MonoBehaviour
     private bool isBoosted = false; // Represents whether car movement has started
     private bool isDead = false;
     public bool hasWonPlayer { get; private set; } = false;
+    private bool isMovementFrozen = false;
+    private bool isCurrentlyDrifting = false;
+    private float driftCooldownTimer = 0f;
+
+    public void FreezeMovement(bool freeze = true)
+    {
+        isMovementFrozen = freeze;
+        if (freeze && rb != null)
+        {
+            rb.linearVelocity = Vector2.zero;
+            rb.angularVelocity = 0f;
+        }
+    }
+
+    public void SetCarSprite(Sprite newSprite)
+    {
+        if (newSprite == null) return;
+        if (spriteRenderer == null) spriteRenderer = GetComponent<SpriteRenderer>();
+        if (spriteRenderer != null)
+        {
+            spriteRenderer.sprite = newSprite;
+        }
+    }
 
     private InputAction MoveInput => moveAction != null ? moveAction.action : fallbackMoveAction;
     private InputAction JumpInput => JumpAction != null ? JumpAction.action : fallbackJumpAction;
@@ -332,7 +355,7 @@ public class CarControllerSingle : MonoBehaviour
             startPromptVisual.SetActive(false);
         }
 
-        if (isDead || hasWonPlayer) return;
+        if (isDead || hasWonPlayer || isMovementFrozen) return;
 
         bool actionPressed = false;
         if (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame)
@@ -363,7 +386,7 @@ public class CarControllerSingle : MonoBehaviour
 
     private void HandleActionPressed()
     {
-        if (isDead || hasWonPlayer) return;
+        if (isDead || hasWonPlayer || isMovementFrozen) return;
 
         if (Time.frameCount == lastActionFrame) return;
         lastActionFrame = Time.frameCount;
@@ -393,7 +416,7 @@ public class CarControllerSingle : MonoBehaviour
 
     private void TryExecuteJump()
     {
-        if (!isBoosted || isDead || hasWonPlayer) return;
+        if (!isBoosted || isDead || hasWonPlayer || isMovementFrozen) return;
 
         if (isJumping) return;
 
@@ -412,6 +435,16 @@ public class CarControllerSingle : MonoBehaviour
 
     void FixedUpdate()
     {
+        if (isMovementFrozen)
+        {
+            if (rb != null)
+            {
+                rb.linearVelocity = Vector2.zero;
+                rb.angularVelocity = 0f;
+            }
+            return;
+        }
+
         if (!isBoosted || isDead || hasWonPlayer)
         {
             return;
@@ -641,13 +674,32 @@ public class CarControllerSingle : MonoBehaviour
 
     private void UpdateTyreMarks(float turn)
     {
-        if (tyreMarkPrefab == null || isJumping || Mathf.Abs(turn) < 0.5f) return;
+        if (tyreMarkPrefab == null || isJumping || Mathf.Abs(turn) < 0.5f || isMovementFrozen) return;
         if (isTouchingBoundary || boundaryDriftTimer > 0f) return;
 
         float sidewaysVelocity = GetSidewaysVelocity();
         float currentDriftThreshold = driftThreshold;
 
-        if (Mathf.Abs(sidewaysVelocity) < currentDriftThreshold) return;
+        bool isDriftingNow = Mathf.Abs(sidewaysVelocity) >= currentDriftThreshold && isBoosted && !isDead && !hasWonPlayer;
+        if (isDriftingNow)
+        {
+            driftCooldownTimer = 0.25f;
+            if (!isCurrentlyDrifting)
+            {
+                isCurrentlyDrifting = true;
+                EasterStatsTracker.RegisterDrift();
+            }
+        }
+        else if (isCurrentlyDrifting)
+        {
+            driftCooldownTimer -= Time.fixedDeltaTime;
+            if (driftCooldownTimer <= 0f)
+            {
+                isCurrentlyDrifting = false;
+            }
+        }
+
+        if (!isDriftingNow) return;
 
         UpdateTyreMark(frontLeftTyre, ref lastFrontLeftPosition, ref frontLeftDistance);
         UpdateTyreMark(frontRightTyre, ref lastFrontRightPosition, ref frontRightDistance);

@@ -26,7 +26,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2774005325675742035}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: -4.84, y: -1.28, z: 0}
   m_LocalScale: {x: 4, y: 4, z: 1}
   m_ConstrainProportionsScale: 0
@@ -87,7 +87,7 @@ SpriteRenderer:
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
-  m_Size: {x: 1, y: 1}
+  m_Size: {x: 0.23809524, y: 0.18253969}
   m_AdaptiveModeThreshold: 0.5
   m_SpriteTileMode: 0
   m_WasSpriteAssigned: 1
@@ -109,8 +109,4 @@ MonoBehaviour:
   sideOffset: 0.15
   positionSmoothness: 8
   rotationSmoothness: 6
-  rotationAmount: 0.95
-  reflectionDelay: 0.12
-  waterReflectionColor: {r: 0.25, g: 0.78, b: 1, a: 0.55}
-  groundShadowColor: {r: 0, g: 0, b: 0, a: 0.6}
-  waterReflectionMaterial: {fileID: 0}
+  groundShadowColor: {r: 0, g: 0, b: 0, a: 0.4509804}

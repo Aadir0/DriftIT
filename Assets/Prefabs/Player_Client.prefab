@@ -232,8 +232,8 @@ CapsuleCollider2D:
   m_UsedByEffector: 0
   m_CompositeOperation: 0
   m_CompositeOrder: 0
-  m_Offset: {x: 0.00013167413, y: 0.00005879252}
-  m_Size: {x: 0.11850859, y: 0.081381485}
+  m_Offset: {x: 0.00046542296, y: 0.0002256408}
+  m_Size: {x: 0.1238485, y: 0.07771056}
   m_Direction: 1
 --- !u!50 &4966779225001825774
 Rigidbody2D:
@@ -274,13 +274,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 2420538312
+  GlobalObjectIdHash: 1836417898
   InScenePlacedSourceGlobalObjectIdHash: 1836417898
   DeferredDespawnTick: 0
   Ownership: 1
   AlwaysReplicateAsRoot: 0
   SynchronizeTransform: 0
-  m_InScenePlaced: 1
+  m_InScenePlaced: 0
   ActiveSceneSynchronization: 0
   SceneMigrationSynchronization: 0
   SpawnWithObservers: 1

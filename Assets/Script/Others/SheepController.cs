@@ -402,6 +402,9 @@ public class SheepController : MonoBehaviour
         if (currentState == SheepState.Dead) return;
         currentState = SheepState.Dead;
 
+        // Register sheep hit for Easter stats tracking
+        EasterStatsTracker.RegisterSheepHit();
+
         if (col != null) col.enabled = false;
         if (animator != null) animator.enabled = false;
         if (rb != null)

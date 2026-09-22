@@ -591,6 +591,65 @@ public class LeaderboardManager : MonoBehaviour
         }
     }
 
+    [ContextMenu("Clear All Leaderboard Data (Local + Cloud)")]
+    public void ClearAllLeaderboardDataMenu()
+    {
+        ClearAllLeaderboardData((success, msg) =>
+        {
+            Debug.Log($"[LeaderboardManager] Clear All Leaderboard Data result: {msg}");
+        });
+    }
+
+    public void ClearAllLeaderboardData(Action<bool, string> onComplete = null)
+    {
+        // 1. Clear in-memory entries
+        leaderboardData = new LeaderboardDataWrapper();
+
+        // 2. Clear PlayerPrefs
+        if (PlayerPrefs.HasKey(PREFS_KEY))
+        {
+            PlayerPrefs.DeleteKey(PREFS_KEY);
+            PlayerPrefs.Save();
+        }
+
+        // 3. Clear local Documents JSON file
+        try
+        {
+            string filePath = GetLeaderboardJsonFilePath();
+            if (System.IO.File.Exists(filePath))
+            {
+                System.IO.File.WriteAllText(filePath, "{\"leaderboard\":[],\"lastUpdated\":\"\"}", System.Text.Encoding.UTF8);
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[LeaderboardManager] Error clearing local JSON file: {ex.Message}");
+        }
+
+        // 4. Clear Cloud Firebase database
+        if (CloudLeaderboardService.Instance != null)
+        {
+            CloudLeaderboardService.Instance.ClearCloudLeaderboard((cloudSuccess, cloudMsg) =>
+            {
+                if (cloudSuccess)
+                {
+                    Debug.Log("[LeaderboardManager] Successfully wiped local and cloud leaderboard records!");
+                    onComplete?.Invoke(true, "All local and cloud leaderboard data cleared successfully.");
+                }
+                else
+                {
+                    Debug.LogWarning($"[LeaderboardManager] Local cleared, but cloud error: {cloudMsg}");
+                    onComplete?.Invoke(false, $"Local data cleared, cloud note: {cloudMsg}");
+                }
+            });
+        }
+        else
+        {
+            Debug.Log("[LeaderboardManager] Local leaderboard cleared (CloudLeaderboardService not active).");
+            onComplete?.Invoke(true, "Local leaderboard cleared.");
+        }
+    }
+
     private void CheckAndPerformInitialReset()
     {
         if (!PlayerPrefs.HasKey(LEADERBOARD_RESET_VERSION_KEY))
