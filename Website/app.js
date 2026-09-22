@@ -1,16 +1,20 @@
-// DriftIT — Native Table Wooden Leaderboard (Top 200)
+// DriftIT — Global Leaderboard Client
 
 const ENDPOINT = 'https://driftit-6dd08-default-rtdb.asia-southeast1.firebasedatabase.app/leaderboard.json';
 const AUTO_REFRESH_INTERVAL_MS = 15000;
 
 // State
 let allRuns = [];
+let filteredRuns = [];
 let selectedIndex = 0;
 let autoRefreshTimer = null;
+let searchQuery = '';
 
 // DOM Elements
 const leaderboardRows = document.getElementById('leaderboardRows');
 const refreshBtn = document.getElementById('refreshBtn');
+const searchInput = document.getElementById('searchInput');
+const recordCount = document.getElementById('recordCount');
 
 // Sidebar Elements
 const sidebarRank = document.getElementById('sidebarRank');
@@ -22,7 +26,16 @@ const stagesList = document.getElementById('stagesList');
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     if (refreshBtn) {
-        refreshBtn.addEventListener('click', () => fetchLeaderboardData());
+        refreshBtn.addEventListener('click', () => {
+            fetchLeaderboardData();
+        });
+    }
+
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            searchQuery = e.target.value.trim().toLowerCase();
+            applyFilter();
+        });
     }
 
     fetchLeaderboardData();
@@ -38,7 +51,7 @@ function setupAutoRefresh() {
 
 async function fetchLeaderboardData(isSilent = false) {
     if (!isSilent && leaderboardRows) {
-        leaderboardRows.innerHTML = '<tr><td colspan="6" class="loading-text">Loading Leaderboard...</td></tr>';
+        leaderboardRows.innerHTML = '<tr><td colspan="6" class="loading-message">Loading leaderboard data...</td></tr>';
     }
 
     try {
@@ -48,7 +61,7 @@ async function fetchLeaderboardData(isSilent = false) {
         });
 
         if (!response.ok) {
-            throw new Error(`HTTP error ${response.status}`);
+            throw new Error(`HTTP ${response.status}`);
         }
 
         const data = await response.json();
@@ -58,17 +71,15 @@ async function fetchLeaderboardData(isSilent = false) {
         allRuns = [];
     }
 
-    renderLeaderboard();
+    applyFilter();
 }
 
 function formatCleanDate(rawDate) {
     if (!rawDate) return "Recent";
     const str = String(rawDate).trim();
-    // If format is YYYY-MM-DD HH:mm:ss, strip off seconds -> YYYY-MM-DD HH:mm
     if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(str)) {
         return str.substring(0, 16);
     }
-    // If ISO format like 2026-09-21T03:27:00
     if (str.includes('T')) {
         const parts = str.split('T');
         const datePart = parts[0];
@@ -100,7 +111,6 @@ function normalizeData(rawData) {
         return (parseInt(a.totalDeaths) || 0) - (parseInt(b.totalDeaths) || 0);
     });
 
-    // Clean & format
     return runs.map((item) => {
         const timeSec = parseFloat(item.totalTimeSeconds) || 0;
         const mins = Math.floor(timeSec / 60);
@@ -119,53 +129,77 @@ function normalizeData(rawData) {
             dateTime: date,
             stages: Array.isArray(item.stages) ? item.stages : []
         };
-    }).slice(0, 200); // Cap at Top 200
+    }).slice(0, 200);
+}
+
+function applyFilter() {
+    if (!searchQuery) {
+        filteredRuns = allRuns.map((r, i) => ({ ...r, originalRank: i + 1 }));
+    } else {
+        filteredRuns = allRuns
+            .map((r, i) => ({ ...r, originalRank: i + 1 }))
+            .filter(r => r.playerName && r.playerName.toLowerCase().includes(searchQuery));
+    }
+
+    if (recordCount) {
+        recordCount.innerText = `${filteredRuns.length} record${filteredRuns.length === 1 ? '' : 's'}`;
+    }
+
+    renderLeaderboard();
 }
 
 function renderLeaderboard() {
     if (!leaderboardRows) return;
 
-    if (allRuns.length === 0) {
-        leaderboardRows.innerHTML = '<tr><td colspan="6" class="loading-text" style="color:#8e9bae;">No runs registered yet.</td></tr>';
+    if (filteredRuns.length === 0) {
+        const msg = searchQuery ? 'No drivers matching search.' : 'No runs submitted yet.';
+        leaderboardRows.innerHTML = `<tr><td colspan="6" class="empty-message">${msg}</td></tr>`;
         renderEmptySidebar();
         return;
     }
 
     let rowsHtml = '';
-    allRuns.forEach((run, index) => {
-        const rank = index + 1;
-        let rankClass = 'rank-norm';
-        if (rank === 1) rankClass = 'rank-1';
-        else if (rank === 2) rankClass = 'rank-2';
-        else if (rank === 3) rankClass = 'rank-3';
+    filteredRuns.forEach((run, index) => {
+        const rank = run.originalRank;
+        let rankClass = 'rank-badge';
+        if (rank === 1) rankClass += ' rank-1';
+        else if (rank === 2) rankClass += ' rank-2';
+        else if (rank === 3) rankClass += ' rank-3';
 
-        const gradeClass = `grade-${run.grade}`;
+        const gradeClass = `grade-badge grade-${run.grade}`;
         const activeClass = (index === selectedIndex) ? 'active' : '';
 
         rowsHtml += `
             <tr class="${activeClass}" onclick="selectDriver(${index})" id="row-${index}">
-                <td class="col-rank ${rankClass}">#${rank}</td>
+                <td class="col-rank">
+                    <span class="${rankClass}">#${rank}</span>
+                </td>
                 <td class="col-driver">${escapeHtml(run.playerName)}</td>
-                <td class="col-time">${run.formattedTime}</td>
-                <td class="col-deaths">${run.totalDeaths}</td>
-                <td class="col-grade ${gradeClass}">[${run.grade}]</td>
-                <td class="col-date">${escapeHtml(run.dateTime)}</td>
+                <td class="col-total-time text-right">${run.formattedTime}</td>
+                <td class="col-total-deaths text-right">${run.totalDeaths}</td>
+                <td class="col-grade text-center">
+                    <span class="${gradeClass}">${run.grade}</span>
+                </td>
+                <td class="col-date text-right">${escapeHtml(run.dateTime)}</td>
             </tr>
         `;
     });
 
     leaderboardRows.innerHTML = rowsHtml;
 
-    if (selectedIndex >= allRuns.length) selectedIndex = 0;
+    if (selectedIndex >= filteredRuns.length) selectedIndex = 0;
     selectDriver(selectedIndex);
 }
 
 function selectDriver(index) {
-    if (!allRuns[index]) return;
+    if (!filteredRuns[index]) {
+        renderEmptySidebar();
+        return;
+    }
 
     selectedIndex = index;
-    const run = allRuns[index];
-    const rank = index + 1;
+    const run = filteredRuns[index];
+    const rank = run.originalRank;
 
     // Highlight row
     document.querySelectorAll('#leaderboardRows tr').forEach((el, idx) => {
@@ -173,16 +207,16 @@ function selectDriver(index) {
         else el.classList.remove('active');
     });
 
-    // Update Sidebar
+    // Update Sidebar Profile
     if (sidebarRank) {
         sidebarRank.innerText = `#${rank}`;
-        sidebarRank.className = `driver-rank ${rank === 1 ? 'rank-1' : (rank === 2 ? 'rank-2' : (rank === 3 ? 'rank-3' : 'rank-norm'))}`;
+        sidebarRank.className = `rank-badge ${rank === 1 ? 'rank-1' : (rank === 2 ? 'rank-2' : (rank === 3 ? 'rank-3' : ''))}`;
     }
     if (sidebarDriverName) sidebarDriverName.innerText = run.playerName;
     if (sidebarDate) sidebarDate.innerText = run.dateTime;
     if (sidebarGrade) {
         sidebarGrade.innerText = `[${run.grade}]`;
-        sidebarGrade.className = `driver-grade grade-${run.grade}`;
+        sidebarGrade.className = `grade-badge grade-${run.grade}`;
     }
 
     // Render Stage Breakdown
@@ -190,21 +224,21 @@ function selectDriver(index) {
         if (run.stages && run.stages.length > 0) {
             let stagesHtml = '';
             run.stages.forEach((st, sIdx) => {
-                const stageName = st.levelName ? st.levelName.toUpperCase() : `LEVEL ${sIdx + 1}`;
+                const stageName = st.levelName ? st.levelName.toUpperCase() : `STAGE ${sIdx + 1}`;
                 const timeStr = st.formattedTime || "00:00";
                 const deaths = st.deaths || 0;
 
                 stagesHtml += `
                     <tr>
-                        <td class="st-col-name">${stageName}</td>
-                        <td class="st-col-time">${timeStr}</td>
-                        <td class="st-col-deaths">${deaths}</td>
+                        <td class="col-stage">${escapeHtml(stageName)}</td>
+                        <td class="col-time text-right">${timeStr}</td>
+                        <td class="col-deaths text-right">${deaths}</td>
                     </tr>
                 `;
             });
             stagesList.innerHTML = stagesHtml;
         } else {
-            stagesList.innerHTML = '<tr><td colspan="3" class="stages-empty">No stage breakdown stored for this run.</td></tr>';
+            stagesList.innerHTML = '<tr><td colspan="3" class="empty-message">No stage details stored for this run.</td></tr>';
         }
     }
 }
@@ -214,7 +248,7 @@ function renderEmptySidebar() {
     if (sidebarDriverName) sidebarDriverName.innerText = "No Driver";
     if (sidebarDate) sidebarDate.innerText = "--";
     if (sidebarGrade) sidebarGrade.innerText = "[--]";
-    if (stagesList) stagesList.innerHTML = '<tr><td colspan="3" class="stages-empty">No runs available</td></tr>';
+    if (stagesList) stagesList.innerHTML = '<tr><td colspan="3" class="empty-message">No run selected</td></tr>';
 }
 
 function escapeHtml(text) {

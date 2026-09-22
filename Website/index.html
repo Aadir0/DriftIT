@@ -3,94 +3,103 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DriftIT — Leaderboard</title>
+    <title>DriftIT — Global Leaderboard</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="main-container">
+    <div class="app-container">
         
-        <!-- Header -->
-        <header class="header">
-            <h1 class="game-title">DRIFT IT</h1>
-            <button class="refresh-btn" id="refreshBtn">REFRESH</button>
+        <!-- Top Navbar / Header -->
+        <header class="app-header">
+            <div class="brand">
+                <h1 class="brand-title">DriftIT</h1>
+                <span class="badge-live">
+                    <span class="live-dot"></span> Live Leaderboard
+                </span>
+            </div>
+            
+            <div class="header-actions">
+                <div class="search-wrap">
+                    <input type="text" id="searchInput" placeholder="Search driver..." autocomplete="off">
+                </div>
+                <button class="btn-refresh" id="refreshBtn" title="Refresh Leaderboard">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <polyline points="1 20 1 14 7 14"></polyline>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                    </svg>
+                    <span>Refresh</span>
+                </button>
+            </div>
         </header>
 
-        <!-- Stage Layout: Sidebar + Leaderboard -->
-        <div class="layout">
+        <!-- Main Layout: Sidebar & Table -->
+        <main class="main-layout">
             
-            <!-- Left Sidebar: Stage Breakdown -->
-            <aside class="wood-board sidebar">
-                <span class="stud stud-tl"></span>
-                <span class="stud stud-tr"></span>
-                <span class="stud stud-bl"></span>
-                <span class="stud stud-br"></span>
+            <!-- Left Sidebar: Selected Driver Stage Breakdown -->
+            <aside class="card sidebar-card">
+                <div class="card-header">
+                    <h2 class="card-title">Stage Breakdown</h2>
+                </div>
 
-                <h3 class="sidebar-title">STAGE BREAKDOWN</h3>
-                
-                <div class="driver-summary">
-                    <div class="driver-name" id="sidebarDriverName">--</div>
-                    <div class="driver-meta">
-                        <span class="driver-rank" id="sidebarRank">#1</span>
-                        <span class="driver-grade" id="sidebarGrade">[S]</span>
-                        <span class="driver-date" id="sidebarDate">--</span>
+                <div class="driver-profile" id="driverProfile">
+                    <div class="driver-header">
+                        <span class="rank-badge" id="sidebarRank">#1</span>
+                        <div class="driver-title-group">
+                            <div class="driver-name" id="sidebarDriverName">Select a driver</div>
+                            <div class="driver-date" id="sidebarDate">--</div>
+                        </div>
+                        <span class="grade-badge" id="sidebarGrade">[--]</span>
                     </div>
                 </div>
 
-                <div class="stages-table-wrap">
-                    <table class="stages-table">
+                <div class="table-container stages-table-container">
+                    <table class="data-table">
                         <thead>
                             <tr>
-                                <th class="st-col-name">STAGE</th>
-                                <th class="st-col-time">TIME</th>
-                                <th class="st-col-deaths">DEATHS</th>
+                                <th class="col-stage">STAGE</th>
+                                <th class="col-time text-right">TIME</th>
+                                <th class="col-deaths text-right">DEATHS</th>
                             </tr>
                         </thead>
                         <tbody id="stagesList">
                             <tr>
-                                <td colspan="3" class="stages-empty">Select a player from the leaderboard</td>
+                                <td colspan="3" class="empty-message">Select a run from the leaderboard</td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
             </aside>
 
-            <!-- Main Wooden Leaderboard Board -->
-            <section class="wood-board board">
-                <span class="stud stud-tl"></span>
-                <span class="stud stud-tr"></span>
-                <span class="stud stud-bl"></span>
-                <span class="stud stud-br"></span>
+            <!-- Right Main Area: Leaderboard Table -->
+            <section class="card leaderboard-card">
+                <div class="card-header">
+                    <h2 class="card-title">Top 200 Runs</h2>
+                    <span class="record-count" id="recordCount">Loading...</span>
+                </div>
 
-                <h2 class="board-title">LeaderBoard</h2>
-
-                <!-- Perfectly Aligned Native Table -->
-                <div class="table-scroll-wrap" id="boardScrollArea">
-                    <table class="main-table">
+                <div class="table-container main-table-container" id="boardScrollArea">
+                    <table class="data-table">
                         <thead>
                             <tr>
                                 <th class="col-rank">RANK</th>
                                 <th class="col-driver">DRIVER</th>
-                                <th class="col-time">TIME</th>
-                                <th class="col-deaths">DEATHS</th>
-                                <th class="col-grade">GRADE</th>
-                                <th class="col-date">DATE</th>
+                                <th class="col-total-time text-right">TOTAL TIME</th>
+                                <th class="col-total-deaths text-right">DEATHS</th>
+                                <th class="col-grade text-center">GRADE</th>
+                                <th class="col-date text-right">DATE</th>
                             </tr>
                         </thead>
                         <tbody id="leaderboardRows">
                             <tr>
-                                <td colspan="6" class="loading-text">Loading Leaderboard...</td>
+                                <td colspan="6" class="loading-message">Loading leaderboard data...</td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
-
-                <!-- Bottom Back / Action -->
-                <div class="board-footer">
-                    <button class="back-text" onclick="document.getElementById('boardScrollArea').scrollTo({top:0,behavior:'smooth'})">Back</button>
-                </div>
             </section>
 
-        </div>
+        </main>
     </div>
 
     <script src="app.js"></script>

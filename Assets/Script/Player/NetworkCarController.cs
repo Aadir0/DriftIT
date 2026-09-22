@@ -38,16 +38,6 @@ public class NetworkCarController : NetworkBehaviour
     [SerializeField] private float driftFactor = 0.94f; // Responsive traction
     [SerializeField] private float driftIntensity = 0.82f;
 
-    [Header("Pre-Start Wobble Indicator Settings")]
-    [SerializeField] private GameObject startPromptVisual;
-    [SerializeField] private Vector3 promptScale = Vector3.one; // Inspector field to easily resize visual prompt
-    [SerializeField] private Vector3 promptOffset = new Vector3(1.2f, 0f, -0.5f); // Positioned just ahead of the player car!
-    [SerializeField] private float wobbleSpeed = 2.5f;
-    [SerializeField] private float wobbleHeight = 0.04f; // Very subtle vertical wobble
-    [SerializeField] private float promptPulseSpeed = 2.5f;
-    [SerializeField] private float promptPulseAmount = 0.06f; // Gentle scale up/down (±6%)
-    private Vector3 initialPromptLocalPos;
-
     [Header("Car Start Effect")]
     [SerializeField] private GameObject carStartEffectPrefab;
     [SerializeField] private float carStartEffectLifetime = 1.0f;
@@ -219,7 +209,6 @@ public class NetworkCarController : NetworkBehaviour
         }
 
         ApplyLevelJumpSettings();
-        SetupStartPromptVisual();
         InitializeAudioSources();
         CreateFallbackActions();
         InitializeTyrePositions();
@@ -280,80 +269,6 @@ public class NetworkCarController : NetworkBehaviour
                     return;
                 }
             }
-        }
-    }
-
-    private void SetupStartPromptVisual()
-    {
-        if (startPromptVisual != null && !startPromptVisual.scene.isLoaded)
-        {
-            startPromptVisual = Instantiate(startPromptVisual, transform);
-        }
-
-        if (startPromptVisual == null)
-        {
-            foreach (Transform child in transform)
-            {
-                string cName = child.name.ToLower();
-                if (cName.Contains("start") || cName.Contains("prompt") || cName.Contains("indicator") || cName.Contains("visual") || child.CompareTag("StartPrompt"))
-                {
-                    startPromptVisual = child.gameObject;
-                    break;
-                }
-            }
-
-            if (startPromptVisual == null)
-            {
-                GameObject generatedPrompt = new GameObject("StartPromptVisual");
-                generatedPrompt.transform.SetParent(transform, false);
-
-                TextMeshPro tmPro = generatedPrompt.AddComponent<TextMeshPro>();
-                tmPro.text = "PRESS SPACE / [A] TO START";
-                tmPro.fontSize = 2.5f;
-                tmPro.alignment = TextAlignmentOptions.Center;
-                tmPro.color = Color.yellow;
-                tmPro.sortingOrder = 50;
-
-                startPromptVisual = generatedPrompt;
-            }
-        }
-
-        if (startPromptVisual != null)
-        {
-            if (startPromptVisual.transform.parent != transform)
-            {
-                startPromptVisual.transform.SetParent(transform, false);
-            }
-
-            initialPromptLocalPos = promptOffset;
-            startPromptVisual.transform.localPosition = initialPromptLocalPos;
-            startPromptVisual.transform.localScale = promptScale;
-
-            SpriteRenderer promptSr = startPromptVisual.GetComponent<SpriteRenderer>();
-            if (promptSr == null) promptSr = startPromptVisual.GetComponentInChildren<SpriteRenderer>(true);
-
-            if (promptSr != null)
-            {
-                promptSr.enabled = true;
-                if (spriteRenderer != null)
-                {
-                    promptSr.sortingLayerID = spriteRenderer.sortingLayerID;
-                    promptSr.sortingOrder = spriteRenderer.sortingOrder + 30;
-                }
-                else
-                {
-                    promptSr.sortingOrder = 30;
-                }
-            }
-
-            Renderer rend = startPromptVisual.GetComponent<Renderer>();
-            if (rend != null)
-            {
-                rend.enabled = true;
-                rend.sortingOrder = 50;
-            }
-
-            startPromptVisual.SetActive(!isBoosted && !hasWonPlayer);
         }
     }
 
@@ -501,7 +416,6 @@ public class NetworkCarController : NetworkBehaviour
             Collider2D[] allC = GetComponentsInChildren<Collider2D>(true);
             foreach (var c in allC) if (c != null) c.enabled = false;
             StopCarAudio();
-            if (startPromptVisual != null) startPromptVisual.SetActive(false);
             if (rb != null)
             {
                 rb.simulated = false;
@@ -757,11 +671,6 @@ public class NetworkCarController : NetworkBehaviour
         // Trigger finish line win particle system at winner's location
         FinishLine.PlayWinParticlesGlobal(transform.position);
 
-        if (startPromptVisual != null)
-        {
-            startPromptVisual.SetActive(false);
-        }
-
         if (rb != null)
         {
             rb.linearVelocity = Vector2.zero;
@@ -905,22 +814,6 @@ public class NetworkCarController : NetworkBehaviour
             }
         }
     }
-
-    if (startPromptVisual != null)
-    {
-        if (!isSameScene)
-        {
-            startPromptVisual.SetActive(false);
-        }
-        else if (!isBoosted && !hasWonPlayer && (IsOwner || IsLocalPlayer))
-        {
-            startPromptVisual.SetActive(true);
-        }
-        else
-        {
-            startPromptVisual.SetActive(false);
-        }
-    }
 }
 
 private void CacheComponents()
@@ -967,7 +860,6 @@ public static void UpdateAllCarsSceneVisibility()
             StartCoroutine(RetryApplyLevelJumpSettings());
         }
         currentSpeed = speed;
-        SetupStartPromptVisual();
 
         if (healthComp != null)
         {
@@ -1159,7 +1051,6 @@ public static void UpdateAllCarsSceneVisibility()
         {
             if (spriteRenderer != null && spriteRenderer.enabled) spriteRenderer.enabled = false;
             if (boxCollider != null && boxCollider.enabled) boxCollider.enabled = false;
-            if (startPromptVisual != null && startPromptVisual.activeSelf) startPromptVisual.SetActive(false);
             StopCarAudio();
             return;
         }
@@ -1172,7 +1063,6 @@ public static void UpdateAllCarsSceneVisibility()
             foreach (var r in allR) if (r != null && r.enabled) r.enabled = false;
             Collider2D[] allC = GetComponentsInChildren<Collider2D>(true);
             foreach (var c in allC) if (c != null && c.enabled) c.enabled = false;
-            if (startPromptVisual != null && startPromptVisual.activeSelf) startPromptVisual.SetActive(false);
             StopCarAudio();
             return;
         }
@@ -1192,21 +1082,6 @@ public static void UpdateAllCarsSceneVisibility()
                 if (spriteRenderer != null && !spriteRenderer.enabled) spriteRenderer.enabled = true;
                 if (boxCollider != null && !boxCollider.enabled) boxCollider.enabled = true;
             }
-        }
-
-        if (!isBoosted && !hasWonPlayer && startPromptVisual != null)
-        {
-            if (!startPromptVisual.activeSelf) startPromptVisual.SetActive(true);
-
-            float bob = Mathf.Sin(Time.time * wobbleSpeed) * wobbleHeight;
-            float pulse = 1f + (Mathf.Sin(Time.time * promptPulseSpeed) * promptPulseAmount);
-
-            startPromptVisual.transform.localPosition = initialPromptLocalPos + new Vector3(0f, bob, 0f);
-            startPromptVisual.transform.localScale = promptScale * pulse;
-        }
-        else if ((isBoosted || hasWonPlayer) && startPromptVisual != null && startPromptVisual.activeSelf)
-        {
-            startPromptVisual.SetActive(false);
         }
 
         if (!IsOwner && !IsLocalPlayer) return;
@@ -1293,11 +1168,6 @@ public static void UpdateAllCarsSceneVisibility()
 
             isBoosted = true;
             currentSpeed = speed;
-
-            if (startPromptVisual != null)
-            {
-                startPromptVisual.SetActive(false);
-            }
 
             if (carStartEffectPrefab != null)
             {

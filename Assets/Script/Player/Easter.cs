@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -7,38 +6,53 @@ using UnityEngine.UI;
 
 public class Easter : MonoBehaviour
 {
-    [Header("UI Text References")]
+    [Header("Easter Message UI (Optional)")]
     [SerializeField] private Text easterText;
     [SerializeField] private TMPro.TextMeshProUGUI easterTmpText;
     [SerializeField] private GameObject easterTextObject;
-
-    [Header("Message Settings")]
     [SerializeField] private string easterMessage = "You found the Easter!";
+
+    [Header("Easter Stats Text UI (Sheep Hits & Drifts)")]
+    [Tooltip("Standard UI Text component to display sheep hits and drifts.")]
+    [SerializeField] private Text statsText;
+    [Tooltip("TextMeshProUGUI component to display sheep hits and drifts.")]
+    [SerializeField] private TMPro.TextMeshProUGUI statsTmpText;
+    [Tooltip("Optional parent GameObject of stats text to activate upon triggering.")]
+    [SerializeField] private GameObject statsTextObject;
+    [Tooltip("Format for stats. Placeholders: {sheep} = sheep hits, {drifts} = drifts count.")]
+    [TextArea(2, 4)]
+    [SerializeField] private string statsFormat = "SHEEP HITS: {sheep}\nDRIFTS: {drifts}";
 
     [Header("Multi-Easter Tracking")]
     [Tooltip("Unique ID for this Easter trigger. If left empty, uses current scene name.")]
     [SerializeField] private string easterId = "";
-    [Tooltip("Total number of unique Easters that must be found to trigger completion.")]
+    [Tooltip("Total number of unique Easters required across the run.")]
     [SerializeField] private int requiredEasterCount = 2;
+    [Tooltip("Disable collider after being triggered once so it cannot be re-triggered.")]
+    [SerializeField] private bool disableTriggerAfterFirstUse = true;
 
-    [Header("Easter Reward & Car Customization")]
+    [Header("Easter Rewards & Customization")]
     [Tooltip("Assign the new sprite here that replaces the player car sprite once both Easters are found.")]
     [SerializeField] private Sprite easterCarSprite;
-    [Tooltip("Whether to stop/freeze the player car movement when the final Easter is triggered.")]
-    [SerializeField] private bool freezePlayerMovementOnCompletion = true;
-    [Tooltip("Whether to display the stats popup showing Sheep Hits and Drifts.")]
-    [SerializeField] private bool showStatsPopupOnCompletion = true;
-    [Tooltip("Whether dismissing the popup restores player movement.")]
-    [SerializeField] private bool unfreezeOnDismissPopup = true;
+    [Tooltip("Whether to stop/freeze the player car movement when all required Easters are found.")]
+    [SerializeField] private bool freezePlayerOnCompletion = true;
+
+    [Header("Auto-Hide Settings")]
+    [Tooltip("Duration in seconds before Easter and Stats UI automatically hide.")]
+    [SerializeField] private float autoHideDuration = 5f;
+    [Tooltip("Whether to automatically hide stats/easter UI after the duration.")]
+    [SerializeField] private bool autoHideAfterDuration = true;
+    [Tooltip("Whether to unfreeze player movement when the UI auto-hides.")]
+    [SerializeField] private bool unfreezeAfterAutoHide = true;
 
     // Static set tracking which Easters have been found across scenes during this session/run
     public static readonly HashSet<string> FoundEasters = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     public static bool IsEasterCompleted { get; set; } = false;
 
     private BoxCollider2D boxCollider;
-    private static GameObject activePopupCanvasObject;
-    private static bool isPopupOpen = false;
-    private static Easter lastTriggeredEasterInstance;
+    private bool hasTriggeredThisInstance = false;
+    private Coroutine autoHideCoroutine;
+    private GameObject lastTriggeredPlayer;
 
     private void Awake()
     {
@@ -62,33 +76,32 @@ public class Easter : MonoBehaviour
             easterId = SceneManager.GetActiveScene().name;
         }
 
-        AutoFindTextComponent();
+        AutoFindTextComponents();
         HideEasterUI();
+        HideStatsUI();
     }
 
     private void Start()
     {
-        AutoFindTextComponent();
+        AutoFindTextComponents();
         HideEasterUI();
+        HideStatsUI();
     }
 
-    private void Update()
+    private void AutoFindTextComponents()
     {
-        if (isPopupOpen)
-        {
-            if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.Return))
-            {
-                DismissEasterPopup();
-            }
-        }
-    }
-
-    private void AutoFindTextComponent()
-    {
+        // 1. Easter message text auto-find
         if (easterTextObject == null)
         {
             if (easterText != null) easterTextObject = easterText.gameObject;
             else if (easterTmpText != null) easterTextObject = easterTmpText.gameObject;
+        }
+
+        // 2. Stats text auto-find if not explicitly assigned
+        if (statsTextObject == null)
+        {
+            if (statsText != null) statsTextObject = statsText.gameObject;
+            else if (statsTmpText != null) statsTextObject = statsTmpText.gameObject;
         }
 
         if (easterText == null && easterTmpText == null && easterTextObject == null)
@@ -99,7 +112,8 @@ public class Easter : MonoBehaviour
                 Transform[] allChildren = canvas.GetComponentsInChildren<Transform>(true);
                 foreach (var t in allChildren)
                 {
-                    if (t.gameObject.name.ToLower().Contains("easter"))
+                    string tName = t.gameObject.name.ToLower();
+                    if (tName.Contains("easter") && !tName.Contains("stat"))
                     {
                         easterTextObject = t.gameObject;
                         easterText = t.GetComponent<Text>();
@@ -138,6 +152,33 @@ public class Easter : MonoBehaviour
         }
     }
 
+    private void ShowStatsUI()
+    {
+        string formattedStats = statsFormat
+            .Replace("{sheep}", EasterStatsTracker.SheepHitCount.ToString())
+            .Replace("{drifts}", EasterStatsTracker.DriftCount.ToString())
+            .Replace("{hits}", EasterStatsTracker.SheepHitCount.ToString());
+
+        if (statsTextObject != null)
+        {
+            statsTextObject.SetActive(true);
+        }
+
+        if (statsText != null)
+        {
+            statsText.gameObject.SetActive(true);
+            statsText.enabled = true;
+            statsText.text = formattedStats;
+        }
+
+        if (statsTmpText != null)
+        {
+            statsTmpText.gameObject.SetActive(true);
+            statsTmpText.enabled = true;
+            statsTmpText.text = formattedStats;
+        }
+    }
+
     private void HideEasterUI()
     {
         if (easterText != null)
@@ -155,6 +196,26 @@ public class Easter : MonoBehaviour
         if (easterTextObject != null)
         {
             easterTextObject.SetActive(false);
+        }
+    }
+
+    private void HideStatsUI()
+    {
+        if (statsText != null)
+        {
+            statsText.text = "";
+            statsText.enabled = false;
+        }
+
+        if (statsTmpText != null)
+        {
+            statsTmpText.text = "";
+            statsTmpText.enabled = false;
+        }
+
+        if (statsTextObject != null)
+        {
+            statsTextObject.SetActive(false);
         }
     }
 
@@ -192,20 +253,28 @@ public class Easter : MonoBehaviour
         return false;
     }
 
-    private void OnTriggerEnter2D(Collider2D other)
+    private void OnDisable()
     {
-        if (IsPlayerCollider(other, out GameObject playerRoot))
+        if (autoHideCoroutine != null)
         {
-            ShowEasterUI();
-            HandleEasterTriggered(playerRoot);
+            StopCoroutine(autoHideCoroutine);
+            autoHideCoroutine = null;
         }
     }
 
-    private void OnTriggerStay2D(Collider2D other)
+    private void OnTriggerEnter2D(Collider2D other)
     {
-        if (IsPlayerCollider(other, out _))
+        if (hasTriggeredThisInstance) return;
+
+        if (IsPlayerCollider(other, out GameObject playerRoot))
         {
+            hasTriggeredThisInstance = true;
+            lastTriggeredPlayer = playerRoot;
+
             ShowEasterUI();
+            ShowStatsUI();
+            HandleEasterTriggered(playerRoot);
+            StartAutoHideTimer(playerRoot);
         }
     }
 
@@ -214,14 +283,56 @@ public class Easter : MonoBehaviour
         if (IsPlayerCollider(other, out _))
         {
             HideEasterUI();
+
+            if (!IsEasterCompleted)
+            {
+                HideStatsUI();
+            }
+
+            if (disableTriggerAfterFirstUse)
+            {
+                if (boxCollider != null)
+                {
+                    boxCollider.enabled = false;
+                }
+            }
+            else
+            {
+                hasTriggeredThisInstance = false;
+            }
         }
+    }
+
+    private void StartAutoHideTimer(GameObject playerObj = null)
+    {
+        if (!autoHideAfterDuration) return;
+
+        if (autoHideCoroutine != null)
+        {
+            StopCoroutine(autoHideCoroutine);
+        }
+        autoHideCoroutine = StartCoroutine(AutoHideRoutine(playerObj ?? lastTriggeredPlayer));
+    }
+
+    private System.Collections.IEnumerator AutoHideRoutine(GameObject playerObj)
+    {
+        yield return new WaitForSeconds(autoHideDuration);
+
+        HideEasterUI();
+        HideStatsUI();
+
+        if (unfreezeAfterAutoHide)
+        {
+            FreezePlayer(playerObj ?? lastTriggeredPlayer, false);
+        }
+
+        autoHideCoroutine = null;
     }
 
     private void HandleEasterTriggered(GameObject playerObj)
     {
         string currentId = string.IsNullOrWhiteSpace(easterId) ? SceneManager.GetActiveScene().name : easterId;
         FoundEasters.Add(currentId);
-        lastTriggeredEasterInstance = this;
 
         Debug.Log($"[Easter] Triggered: '{currentId}'. Total found: {FoundEasters.Count}/{requiredEasterCount}");
 
@@ -235,9 +346,10 @@ public class Easter : MonoBehaviour
     private void ExecuteEasterCompletion(GameObject playerObj)
     {
         Debug.Log("[Easter] All Easters found! Executing completion event...");
+        lastTriggeredPlayer = playerObj;
 
-        // 1. Freeze player movement
-        if (freezePlayerMovementOnCompletion)
+        // 1. Stop / Freeze player movement
+        if (freezePlayerOnCompletion)
         {
             FreezePlayer(playerObj, true);
         }
@@ -247,16 +359,12 @@ public class Easter : MonoBehaviour
         {
             ApplyCarSprite(playerObj, easterCarSprite);
         }
-        else
-        {
-            Debug.Log("[Easter] No easterCarSprite assigned in Inspector. Keeping current sprite.");
-        }
 
-        // 3. Show Stats Popup Dialog
-        if (showStatsPopupOnCompletion)
-        {
-            ShowEasterStatsDialog();
-        }
+        // 3. Update stats UI display
+        ShowStatsUI();
+
+        // 4. Start 5-second auto hide timer
+        StartAutoHideTimer(playerObj);
     }
 
     private static void FreezePlayer(GameObject playerObj, bool freeze)
@@ -311,153 +419,6 @@ public class Easter : MonoBehaviour
         }
     }
 
-    public static void ShowEasterStatsDialog()
-    {
-        if (activePopupCanvasObject != null)
-        {
-            UnityEngine.Object.Destroy(activePopupCanvasObject);
-        }
-
-        isPopupOpen = true;
-
-        int sheepHits = EasterStatsTracker.SheepHitCount;
-        int drifts = EasterStatsTracker.DriftCount;
-
-        // 1. Root Canvas
-        activePopupCanvasObject = new GameObject("EasterStatsPopupCanvas");
-        Canvas canvas = activePopupCanvasObject.AddComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        canvas.sortingOrder = 9999;
-
-        CanvasScaler scaler = activePopupCanvasObject.AddComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920, 1080);
-        scaler.matchWidthOrHeight = 0.5f;
-
-        activePopupCanvasObject.AddComponent<GraphicRaycaster>();
-
-        // 2. Dim Overlay Background
-        GameObject dimObj = new GameObject("DimBackground", typeof(RectTransform), typeof(Image));
-        dimObj.transform.SetParent(activePopupCanvasObject.transform, false);
-        RectTransform dimRect = dimObj.GetComponent<RectTransform>();
-        dimRect.anchorMin = Vector2.zero;
-        dimRect.anchorMax = Vector2.one;
-        dimRect.sizeDelta = Vector2.zero;
-        Image dimImg = dimObj.GetComponent<Image>();
-        dimImg.color = new Color(0f, 0f, 0f, 0.75f);
-
-        // 3. Wooden Modal Box
-        GameObject modalObj = new GameObject("ModalPanel", typeof(RectTransform), typeof(Image));
-        modalObj.transform.SetParent(activePopupCanvasObject.transform, false);
-        RectTransform modalRect = modalObj.GetComponent<RectTransform>();
-        modalRect.sizeDelta = new Vector2(560, 420);
-        modalRect.anchoredPosition = Vector2.zero;
-        Image modalImg = modalObj.GetComponent<Image>();
-        modalImg.color = new Color(0.42f, 0.22f, 0.18f, 0.98f); // Rich wood brown tone
-
-        // Outline / Border on Modal
-        Outline outline = modalObj.AddComponent<Outline>();
-        outline.effectColor = new Color(0.22f, 0.09f, 0.08f, 1f);
-        outline.effectDistance = new Vector2(5, -5);
-
-        // 4. Modal Header Title
-        GameObject titleObj = new GameObject("TitleText", typeof(RectTransform), typeof(TMPro.TextMeshProUGUI));
-        titleObj.transform.SetParent(modalObj.transform, false);
-        RectTransform titleRect = titleObj.GetComponent<RectTransform>();
-        titleRect.anchorMin = new Vector2(0f, 1f);
-        titleRect.anchorMax = new Vector2(1f, 1f);
-        titleRect.pivot = new Vector2(0.5f, 1f);
-        titleRect.anchoredPosition = new Vector2(0, -25);
-        titleRect.sizeDelta = new Vector2(-40, 50);
-        TMPro.TextMeshProUGUI titleTmp = titleObj.GetComponent<TMPro.TextMeshProUGUI>();
-        titleTmp.text = "★ ALL EASTERS FOUND! ★";
-        titleTmp.fontSize = 38;
-        titleTmp.alignment = TMPro.TextAlignmentOptions.Center;
-        titleTmp.color = new Color(1f, 0.84f, 0f); // Gold
-        titleTmp.enableWordWrapping = false;
-
-        // Try load monogram SDF font if present
-        TMPro.TMP_FontAsset fontAsset = Resources.Load<TMPro.TMP_FontAsset>("monogram SDF");
-        if (fontAsset != null) titleTmp.font = fontAsset;
-
-        // 5. Divider Line
-        GameObject divObj = new GameObject("Divider", typeof(RectTransform), typeof(Image));
-        divObj.transform.SetParent(modalObj.transform, false);
-        RectTransform divRect = divObj.GetComponent<RectTransform>();
-        divRect.anchorMin = new Vector2(0.1f, 1f);
-        divRect.anchorMax = new Vector2(0.9f, 1f);
-        divRect.pivot = new Vector2(0.5f, 1f);
-        divRect.anchoredPosition = new Vector2(0, -80);
-        divRect.sizeDelta = new Vector2(0, 3);
-        Image divImg = divObj.GetComponent<Image>();
-        divImg.color = new Color(0.22f, 0.09f, 0.08f, 1f);
-
-        // 6. Stats Content Box
-        GameObject statsObj = new GameObject("StatsContent", typeof(RectTransform), typeof(TMPro.TextMeshProUGUI));
-        statsObj.transform.SetParent(modalObj.transform, false);
-        RectTransform statsRect = statsObj.GetComponent<RectTransform>();
-        statsRect.anchorMin = new Vector2(0f, 0.32f);
-        statsRect.anchorMax = new Vector2(1f, 0.82f);
-        statsRect.anchoredPosition = Vector2.zero;
-        statsRect.sizeDelta = new Vector2(-50, 0);
-        TMPro.TextMeshProUGUI statsTmp = statsObj.GetComponent<TMPro.TextMeshProUGUI>();
-        statsTmp.fontSize = 32;
-        statsTmp.lineSpacing = 20;
-        statsTmp.alignment = TMPro.TextAlignmentOptions.Center;
-        statsTmp.text = $"SHEEP HIT : <color=#FF6B81><b>{sheepHits}</b></color>\n\nDRIFTS : <color=#00FFA3><b>{drifts}</b></color>";
-        if (fontAsset != null) statsTmp.font = fontAsset;
-
-        // 7. Continue Button
-        GameObject btnObj = new GameObject("ContinueButton", typeof(RectTransform), typeof(Image), typeof(Button));
-        btnObj.transform.SetParent(modalObj.transform, false);
-        RectTransform btnRect = btnObj.GetComponent<RectTransform>();
-        btnRect.anchorMin = new Vector2(0.5f, 0f);
-        btnRect.anchorMax = new Vector2(0.5f, 0f);
-        btnRect.pivot = new Vector2(0.5f, 0f);
-        btnRect.anchoredPosition = new Vector2(0, 24);
-        btnRect.sizeDelta = new Vector2(260, 52);
-
-        Image btnImg = btnObj.GetComponent<Image>();
-        btnImg.color = new Color(0.35f, 0.16f, 0.13f, 1f);
-
-        Outline btnOutline = btnObj.AddComponent<Outline>();
-        btnOutline.effectColor = new Color(0.18f, 0.07f, 0.06f, 1f);
-        btnOutline.effectDistance = new Vector2(3, -3);
-
-        Button btn = btnObj.GetComponent<Button>();
-        btn.onClick.AddListener(DismissEasterPopup);
-
-        // Button Text
-        GameObject btnTextObj = new GameObject("BtnText", typeof(RectTransform), typeof(TMPro.TextMeshProUGUI));
-        btnTextObj.transform.SetParent(btnObj.transform, false);
-        RectTransform btnTextRect = btnTextObj.GetComponent<RectTransform>();
-        btnTextRect.anchorMin = Vector2.zero;
-        btnTextRect.anchorMax = Vector2.one;
-        btnTextRect.sizeDelta = Vector2.zero;
-        TMPro.TextMeshProUGUI btnTmp = btnTextObj.GetComponent<TMPro.TextMeshProUGUI>();
-        btnTmp.text = "CONTINUE [SPACE]";
-        btnTmp.fontSize = 26;
-        btnTmp.alignment = TMPro.TextAlignmentOptions.Center;
-        btnTmp.color = Color.white;
-        if (fontAsset != null) btnTmp.font = fontAsset;
-    }
-
-    public static void DismissEasterPopup()
-    {
-        isPopupOpen = false;
-
-        if (activePopupCanvasObject != null)
-        {
-            UnityEngine.Object.Destroy(activePopupCanvasObject);
-            activePopupCanvasObject = null;
-        }
-
-        if (lastTriggeredEasterInstance != null && lastTriggeredEasterInstance.unfreezeOnDismissPopup)
-        {
-            FreezePlayer(null, false);
-        }
-    }
-
     /// <summary>
     /// Resets Easter progress and stats (call when starting a new game / returning to MainMenu).
     /// </summary>
@@ -465,7 +426,6 @@ public class Easter : MonoBehaviour
     {
         FoundEasters.Clear();
         IsEasterCompleted = false;
-        DismissEasterPopup();
         EasterStatsTracker.Reset();
     }
 }
