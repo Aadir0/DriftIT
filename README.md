@@ -125,10 +125,10 @@ The repository includes a standalone web app in the [`Website/`](./Website/) fol
 
 ## 🚀 Deploying the Leaderboard Website
 
-The [Website](./Website/) directory is fully static (HTML, CSS, Vanilla JS) with zero build steps required. You can deploy it in seconds using any of the following methods:
+The [Website](./Website/) directory is fully static (HTML, CSS, Vanilla JS) with zero build steps required.
 
-### Option 1: Deploy to Vercel (Recommended)
-It is deployed at the website [Site](drift-it.vercel.app).
+### Deployed to Vercel on the [Site] (drift-it.vercel.app) .
+
 ---
 
 ## ⚡ Backend & Firebase Setup
