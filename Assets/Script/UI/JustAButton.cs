@@ -729,7 +729,30 @@ public class JustAButton : MonoBehaviour
             return;
         }
 
-        List<LeaderboardEntry> entries = LeaderboardManager.Instance.GetTopEntries();
+        // Show immediate local top runs first if available, or loading message
+        List<LeaderboardEntry> initialEntries = LeaderboardManager.Instance.GetTopEntries();
+        if (initialEntries != null && initialEntries.Count > 0)
+        {
+            RenderLeaderboardTable(initialEntries);
+        }
+        else
+        {
+            globalLeaderboardText.alignment = TMPro.TextAlignmentOptions.Center;
+            globalLeaderboardText.text = "<size=110%><color=#00FFA3>LOADING GLOBAL LEADERBOARD...</color></size>";
+        }
+
+        // Asynchronously fetch live global top 10 from cloud
+        LeaderboardManager.Instance.FetchGlobalTopEntries((entries) =>
+        {
+            if (globalLeaderboardText == null) return;
+            RenderLeaderboardTable(entries);
+        }, limit: 10);
+    }
+
+    private void RenderLeaderboardTable(List<LeaderboardEntry> entries)
+    {
+        if (globalLeaderboardText == null) return;
+
         if (entries == null || entries.Count == 0)
         {
             globalLeaderboardText.alignment = TMPro.TextAlignmentOptions.Center;

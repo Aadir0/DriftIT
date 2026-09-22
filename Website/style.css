@@ -1,0 +1,438 @@
+/* DriftIT — Clean & Minimal Wooden Table Leaderboard */
+
+@font-face {
+    font-family: 'MonogramExtended';
+    src: url('fonts/monogram-extended.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+:root {
+    --font-main: 'MonogramExtended', monospace;
+
+    /* In-Game Chocolate-Cherry Wood Palette */
+    --wood-top: #8b544b;
+    --wood-mid: #78443c;
+    --wood-bot: #61342e;
+    --wood-border: #381814;
+    --wood-plank-dark: rgba(26, 10, 8, 0.45);
+    --wood-plank-light: rgba(255, 255, 255, 0.08);
+
+    /* Clean Arcade Text Colors */
+    --color-gray: #9aa7b8;
+    --color-white: #ffffff;
+    --color-gold: #ffd700;
+    --color-silver: #ffffff;
+    --color-bronze: #e58e26;
+    --color-mint: #00ffa3;
+    --color-coral: #ff6b81;
+    --color-cyan: #00d2ff;
+    --color-orange: #ff9f43;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-weight: normal !important;
+    image-rendering: pixelated;
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Clean, Simple & Minimal Dark Matte Background */
+body {
+    background-color: #170d10;
+    color: var(--color-white);
+    font-family: var(--font-main);
+    min-height: 100vh;
+    padding: 24px 16px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.main-container {
+    width: 100%;
+    max-width: 1180px;
+    margin: 0 auto;
+}
+
+/* Header */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding: 0 8px;
+}
+
+.game-title {
+    font-family: var(--font-main);
+    font-size: 46px;
+    letter-spacing: 2px;
+    color: #ffffff;
+    text-shadow: 2px 2px 0px #000;
+}
+
+.refresh-btn {
+    background: linear-gradient(180deg, var(--wood-top) 0%, var(--wood-mid) 100%);
+    border: 3px solid var(--wood-border);
+    box-shadow: inset 1px 1px 0px rgba(255, 255, 255, 0.2),
+                inset -1px -1px 0px rgba(0, 0, 0, 0.4),
+                2px 2px 0px #000;
+    color: var(--color-white);
+    font-family: var(--font-main);
+    font-size: 26px;
+    padding: 6px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.1s;
+}
+
+.refresh-btn:hover {
+    color: var(--color-mint);
+    transform: translateY(-1px);
+}
+
+.refresh-btn:active {
+    transform: translateY(1px);
+}
+
+/* Main Layout */
+.layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 18px;
+    align-items: stretch;
+}
+
+/* Rich Wooden Board with Corner Studs */
+.wood-board {
+    background: linear-gradient(180deg, var(--wood-top) 0%, var(--wood-mid) 45%, var(--wood-bot) 100%);
+    border: 6px solid var(--wood-border);
+    border-radius: 20px;
+    box-shadow: inset 2px 2px 0px rgba(255, 255, 255, 0.2),
+                inset -2px -2px 0px rgba(0, 0, 0, 0.5),
+                0 12px 28px rgba(0, 0, 0, 0.65);
+    position: relative;
+    padding: 24px 28px;
+    display: flex;
+    flex-direction: column;
+    min-height: 590px;
+}
+
+/* Corner Metal Studs */
+.stud {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    background: #2b120f;
+    border-radius: 50%;
+    box-shadow: inset 1px 1px 0px rgba(255, 255, 255, 0.35),
+                1px 1px 0px rgba(0, 0, 0, 0.8);
+    z-index: 2;
+}
+
+.stud-tl { top: 10px; left: 10px; }
+.stud-tr { top: 10px; right: 10px; }
+.stud-bl { bottom: 10px; left: 10px; }
+.stud-br { bottom: 10px; right: 10px; }
+
+/* ======================================================= */
+/* LEFT SIDEBAR: STAGE BREAKDOWN                           */
+/* ======================================================= */
+.sidebar {
+    min-height: 590px;
+}
+
+.sidebar-title {
+    text-align: center;
+    font-size: 32px;
+    color: var(--color-white);
+    letter-spacing: 1.5px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--wood-plank-dark);
+    box-shadow: 0 1px 0 var(--wood-plank-light);
+    margin-bottom: 16px;
+    text-shadow: 2px 2px 0px #000;
+}
+
+.driver-summary {
+    background: rgba(18, 8, 7, 0.45);
+    border: 2px solid var(--wood-border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+}
+
+.driver-name {
+    font-size: 36px;
+    color: #ffffff;
+    text-shadow: 2px 2px 0px #000;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.driver-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 4px;
+    font-size: 26px;
+}
+
+.driver-rank {
+    color: var(--color-gold);
+    text-shadow: 1px 1px 0px #000;
+}
+
+.driver-date {
+    font-size: 20px;
+    color: var(--color-gray);
+    margin-left: auto;
+}
+
+.stages-table-wrap {
+    flex: 1;
+    width: 100%;
+}
+
+/* Sidebar Fixed Table */
+.stages-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+}
+
+.stages-table th {
+    font-size: 24px;
+    color: var(--color-gray);
+    padding: 8px 4px;
+    border-bottom: 2px solid var(--wood-plank-dark);
+    box-shadow: 0 1px 0 var(--wood-plank-light);
+}
+
+.stages-table td {
+    font-size: 28px;
+    padding: 10px 4px;
+    border-bottom: 2px solid var(--wood-plank-dark);
+    box-shadow: 0 1px 0 var(--wood-plank-light);
+}
+
+.st-col-name {
+    width: 44%;
+    text-align: left;
+    color: #ffffff;
+    text-shadow: 1px 1px 0px #000;
+    padding-left: 4px;
+}
+
+.st-col-time {
+    width: 30%;
+    text-align: center;
+    color: var(--color-mint);
+    text-shadow: 1px 1px 0px #000;
+}
+
+.st-col-deaths {
+    width: 26%;
+    text-align: center;
+    color: var(--color-coral);
+    text-shadow: 1px 1px 0px #000;
+}
+
+.stages-empty {
+    text-align: center;
+    color: var(--color-gray);
+    font-size: 22px;
+    padding: 40px 10px;
+}
+
+/* ======================================================= */
+/* RIGHT MAIN LEADERBOARD BOARD                            */
+/* ======================================================= */
+.board {
+    min-height: 590px;
+}
+
+.board-title {
+    text-align: center;
+    font-size: 54px;
+    color: #ffffff;
+    letter-spacing: 5px;
+    margin-bottom: 18px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--wood-plank-dark);
+    box-shadow: 0 1px 0 var(--wood-plank-light);
+    text-shadow: 3px 3px 0px #000;
+}
+
+/* Scroll Wrapper for the Board Table */
+.table-scroll-wrap {
+    flex: 1;
+    max-height: 440px;
+    overflow-y: scroll;
+    padding-right: 6px;
+    width: 100%;
+}
+
+.table-scroll-wrap::-webkit-scrollbar {
+    width: 8px;
+}
+
+.table-scroll-wrap::-webkit-scrollbar-track {
+    background: rgba(22, 10, 8, 0.7);
+    border-radius: 4px;
+}
+
+.table-scroll-wrap::-webkit-scrollbar-thumb {
+    background: var(--color-mint);
+    border-radius: 4px;
+    box-shadow: 0 0 6px var(--color-mint);
+}
+
+/* Native Fixed-Layout Table for Mathematical Alignment */
+.main-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+}
+
+.main-table thead th {
+    font-size: 26px;
+    color: var(--color-gray);
+    padding: 10px 8px;
+    border-bottom: 2px solid var(--wood-plank-dark);
+    box-shadow: 0 1px 0 var(--wood-plank-light);
+    position: sticky;
+    top: 0;
+    background: var(--wood-mid);
+    z-index: 5;
+}
+
+.main-table tbody tr {
+    cursor: pointer;
+    transition: background 0.1s;
+}
+
+.main-table tbody tr:hover td {
+    background: rgba(0, 0, 0, 0.25);
+}
+
+.main-table tbody tr.active td {
+    background: rgba(0, 255, 163, 0.14);
+    box-shadow: inset 0 0 0 1px rgba(0, 255, 163, 0.4);
+}
+
+.main-table tbody td {
+    font-size: 32px;
+    padding: 12px 8px;
+    border-bottom: 2px solid var(--wood-plank-dark);
+    box-shadow: 0 1px 0 var(--wood-plank-light);
+    vertical-align: middle;
+}
+
+/* Explicit Fixed Widths and Alignments on every column */
+.col-rank {
+    width: 11%;
+    text-align: left;
+    padding-left: 8px !important;
+    text-shadow: 2px 2px 0px #000;
+}
+
+.rank-1 { color: var(--color-gold) !important; }
+.rank-2 { color: var(--color-silver) !important; }
+.rank-3 { color: var(--color-bronze) !important; }
+.rank-norm { color: var(--color-gray) !important; }
+
+.col-driver {
+    width: 29%;
+    text-align: left;
+    color: #ffffff;
+    text-shadow: 2px 2px 0px #000;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-right: 8px !important;
+}
+
+.col-time {
+    width: 16%;
+    text-align: center;
+    color: var(--color-mint);
+    text-shadow: 2px 2px 0px #000;
+}
+
+.col-deaths {
+    width: 13%;
+    text-align: center;
+    color: var(--color-coral);
+    text-shadow: 2px 2px 0px #000;
+}
+
+.col-grade {
+    width: 12%;
+    text-align: center;
+    text-shadow: 2px 2px 0px #000;
+}
+
+.grade-S { color: var(--color-gold) !important; }
+.grade-A { color: var(--color-mint) !important; }
+.grade-B { color: var(--color-cyan) !important; }
+.grade-C { color: var(--color-orange) !important; }
+.grade-D, .grade-E, .grade-F { color: var(--color-coral) !important; }
+
+.col-date {
+    width: 19%;
+    text-align: center;
+    font-size: 24px;
+    color: var(--color-gray);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-right: 6px !important;
+}
+
+.loading-text {
+    text-align: center;
+    color: var(--color-mint);
+    font-size: 28px;
+    padding: 50px 0;
+}
+
+/* Board Footer */
+.board-footer {
+    text-align: center;
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 2px solid var(--wood-plank-dark);
+    box-shadow: 0 1px 0 var(--wood-plank-light);
+}
+
+.back-text {
+    background: transparent;
+    border: none;
+    color: #ffffff;
+    font-family: var(--font-main);
+    font-size: 42px;
+    letter-spacing: 2px;
+    cursor: pointer;
+    text-shadow: 2px 2px 0px #000;
+    transition: color 0.1s;
+}
+
+.back-text:hover {
+    color: var(--color-mint);
+}
+
+/* Responsive */
+@media (max-width: 960px) {
+    .layout {
+        grid-template-columns: 1fr;
+    }
+    .main-table thead th, .main-table tbody td {
+        font-size: 26px;
+    }
+}

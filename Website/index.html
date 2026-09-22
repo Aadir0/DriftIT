@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DriftIT — Leaderboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="main-container">
+        
+        <!-- Header -->
+        <header class="header">
+            <h1 class="game-title">DRIFT IT</h1>
+            <button class="refresh-btn" id="refreshBtn">REFRESH</button>
+        </header>
+
+        <!-- Stage Layout: Sidebar + Leaderboard -->
+        <div class="layout">
+            
+            <!-- Left Sidebar: Stage Breakdown -->
+            <aside class="wood-board sidebar">
+                <span class="stud stud-tl"></span>
+                <span class="stud stud-tr"></span>
+                <span class="stud stud-bl"></span>
+                <span class="stud stud-br"></span>
+
+                <h3 class="sidebar-title">STAGE BREAKDOWN</h3>
+                
+                <div class="driver-summary">
+                    <div class="driver-name" id="sidebarDriverName">--</div>
+                    <div class="driver-meta">
+                        <span class="driver-rank" id="sidebarRank">#1</span>
+                        <span class="driver-grade" id="sidebarGrade">[S]</span>
+                        <span class="driver-date" id="sidebarDate">--</span>
+                    </div>
+                </div>
+
+                <div class="stages-table-wrap">
+                    <table class="stages-table">
+                        <thead>
+                            <tr>
+                                <th class="st-col-name">STAGE</th>
+                                <th class="st-col-time">TIME</th>
+                                <th class="st-col-deaths">DEATHS</th>
+                            </tr>
+                        </thead>
+                        <tbody id="stagesList">
+                            <tr>
+                                <td colspan="3" class="stages-empty">Select a player from the leaderboard</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </aside>
+
+            <!-- Main Wooden Leaderboard Board -->
+            <section class="wood-board board">
+                <span class="stud stud-tl"></span>
+                <span class="stud stud-tr"></span>
+                <span class="stud stud-bl"></span>
+                <span class="stud stud-br"></span>
+
+                <h2 class="board-title">LeaderBoard</h2>
+
+                <!-- Perfectly Aligned Native Table -->
+                <div class="table-scroll-wrap" id="boardScrollArea">
+                    <table class="main-table">
+                        <thead>
+                            <tr>
+                                <th class="col-rank">RANK</th>
+                                <th class="col-driver">DRIVER</th>
+                                <th class="col-time">TIME</th>
+                                <th class="col-deaths">DEATHS</th>
+                                <th class="col-grade">GRADE</th>
+                                <th class="col-date">DATE</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leaderboardRows">
+                            <tr>
+                                <td colspan="6" class="loading-text">Loading Leaderboard...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Bottom Back / Action -->
+                <div class="board-footer">
+                    <button class="back-text" onclick="document.getElementById('boardScrollArea').scrollTo({top:0,behavior:'smooth'})">Back</button>
+                </div>
+            </section>
+
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

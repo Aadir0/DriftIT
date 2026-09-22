@@ -312,8 +312,105 @@ public class LeaderboardManager : MonoBehaviour
 
         SaveLeaderboardToPrefs();
         SaveLeaderboardToJsonFile(playerName, totalRunTime, totalRunDeaths, grade);
+
+        // Submit to Cloud Leaderboard asynchronously for global cross-device access
+        SubmitRunToCloud(playerName, totalRunTime, totalRunDeaths, totalRunTimeouts, score, grade, currentDate);
+
         hasSavedCurrentRun = true;
         return true;
+    }
+
+    private void SubmitRunToCloud(string playerName, float runTime, int runDeaths, int runTimeouts, float runScore, string runGrade, string dateTimeStr)
+    {
+        try
+        {
+            TimeSpan runSpan = TimeSpan.FromSeconds(runTime);
+            string formattedRunTime = string.Format("{0:D2}:{1:D2}", (int)runSpan.TotalMinutes, runSpan.Seconds);
+
+            CloudRunPayload cloudPayload = new CloudRunPayload
+            {
+                runId = Guid.NewGuid().ToString("N"),
+                playerName = playerName,
+                totalTimeSeconds = runTime,
+                formattedTime = formattedRunTime,
+                totalDeaths = runDeaths,
+                totalTimeouts = runTimeouts,
+                score = runScore,
+                grade = runGrade,
+                dateTime = dateTimeStr,
+                stages = new List<CloudStageEntry>()
+            };
+
+            if (levelStats != null)
+            {
+                foreach (var st in levelStats)
+                {
+                    TimeSpan stSpan = TimeSpan.FromSeconds(st.timeSeconds);
+                    cloudPayload.stages.Add(new CloudStageEntry
+                    {
+                        levelName = st.levelName,
+                        timeSeconds = st.timeSeconds,
+                        formattedTime = string.Format("{0:D2}:{1:D2}", (int)stSpan.TotalMinutes, stSpan.Seconds),
+                        deaths = st.deaths
+                    });
+                }
+            }
+
+            if (CloudLeaderboardService.Instance != null)
+            {
+                CloudLeaderboardService.Instance.SubmitRun(cloudPayload, (success, msg) =>
+                {
+                    if (success)
+                    {
+                        Debug.Log("[LeaderboardManager] Cloud leaderboard run saved successfully.");
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"[LeaderboardManager] Cloud leaderboard save note: {msg}");
+                    }
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[LeaderboardManager] Cloud submission error: {ex.Message}");
+        }
+    }
+
+    public void FetchGlobalTopEntries(Action<List<LeaderboardEntry>> onLoaded, int limit = 10)
+    {
+        if (CloudLeaderboardService.Instance != null)
+        {
+            CloudLeaderboardService.Instance.FetchTopRuns(limit, (success, cloudRuns) =>
+            {
+                if (success && cloudRuns != null && cloudRuns.Count > 0)
+                {
+                    List<LeaderboardEntry> cloudEntries = new List<LeaderboardEntry>();
+                    foreach (var cr in cloudRuns)
+                    {
+                        cloudEntries.Add(new LeaderboardEntry
+                        {
+                            playerName = cr.playerName,
+                            totalTimeSeconds = cr.totalTimeSeconds,
+                            totalDeaths = cr.totalDeaths,
+                            totalTimeouts = cr.totalTimeouts,
+                            score = cr.score > 0 ? cr.score : CalculatePerformanceScore(cr.totalTimeSeconds, cr.totalDeaths, cr.totalTimeouts),
+                            grade = !string.IsNullOrEmpty(cr.grade) ? cr.grade : CalculateGrade(cr.totalTimeSeconds, cr.totalDeaths, cr.totalTimeouts),
+                            dateString = cr.dateTime
+                        });
+                    }
+                    onLoaded?.Invoke(cloudEntries);
+                    return;
+                }
+
+                // Fallback to local records if offline or empty
+                onLoaded?.Invoke(GetTopEntries());
+            });
+        }
+        else
+        {
+            onLoaded?.Invoke(GetTopEntries());
+        }
     }
 
     public static string GetLeaderboardJsonFilePath()
@@ -482,7 +579,7 @@ public class LeaderboardManager : MonoBehaviour
         }
     }
 
-    private const string LEADERBOARD_RESET_VERSION_KEY = "Leaderboard_CleanReset_v1";
+    private const string LEADERBOARD_RESET_VERSION_KEY = "Leaderboard_CleanReset_v2";
 
     public void ClearLeaderboardData()
     {
