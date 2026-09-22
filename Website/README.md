@@ -1,56 +1,75 @@
-# DriftIT — Global Leaderboard Website (Top 200)
+# 🏎️ DriftIT — Global Leaderboard Web Dashboard
 
-This is the standalone web dashboard for **DriftIT**, displaying the **Top 200** world record runs submitted by players across all devices.
+[![Vercel](https://img.shields.io/badge/Vercel-Deployment%20Ready-black?logo=vercel&style=flat-square)](https://vercel.com)
+[![Firebase](https://img.shields.io/badge/Firebase-Realtime%20Database-orange?logo=firebase&style=flat-square)](https://firebase.google.com)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](../LICENSE)
 
----
-
-## Features
-- 🏎️ **Top 200 Global Clears**: Displays ranking (#1 to #200), driver name, total time, death count, grade ($S, A, B, C, \dots$), and run timestamp.
-- 📊 **Stage Breakdown Modal**: Click "STAGES" on any record to view stage-by-stage times and deaths for Level 1 through Level 6.
-- ⚡ **Live Auto-Refresh**: Auto-syncs every 15 seconds (can be toggled or manually refreshed).
-- 🔍 **Real-time Filter & Search**: Search by driver name, filter by rank grade, or sort by fastest time, lowest deaths, or recent runs.
-- 📱 **Mobile & Desktop Responsive**: Cyberpunk neon arcade styling optimized for all screen sizes.
+This is the standalone web client and world-record leaderboard dashboard for **[DriftIT](../README.md)**. It displays the **Top 200** world record runs submitted by players across all platforms in real time.
 
 ---
 
-## How to Run Locally
+## ⚡ Live Features
 
-### Option 1: Direct in Browser
-Simply double-click `index.html` or right-click and choose **Open with Browser** (Chrome / Edge / Firefox).
+- 🏎️ **Top 200 Global Clears**: Displays ranking (#1 to #200), driver handle, total completion time, death count, run rank grade ($S, A, B, C, D$), and run timestamp.
+- 📊 **Stage Breakdown Inspector**: Click on any driver to inspect their stage-by-stage split times and death counts for Levels 1 through 6.
+- 🔄 **Live Auto-Sync**: Auto-refreshes every 15 seconds against Firebase Realtime Database.
+- 🔍 **Real-time Filter & Search**: Search by driver name on the fly with instant DOM re-indexing.
+- 📱 **Cyberpunk Arcade UI**: Fully responsive neon dark mode with glassmorphic cards, custom arcade typography, and smooth micro-animations.
 
-### Option 2: Using VS Code Live Server or Python
-In terminal:
+---
+
+## 🚀 Instant Deployment
+
+This folder contains a pure static web application (HTML5, CSS3, Vanilla JavaScript) and requires **no build step**.
+
+### Option 1: Deploy to Vercel (Recommended)
+1. Go to [vercel.com/new](https://vercel.com/new).
+2. Import the repository.
+3. The root [`../vercel.json`](../vercel.json) will automatically serve this folder, or you can set **Root Directory** to `Website`.
+4. Click **Deploy**.
+
+### Option 2: Deploy to GitHub Pages (Automated)
+A GitHub Actions workflow is included at [`.github/workflows/deploy-pages.yml`](../.github/workflows/deploy-pages.yml). Pushing to `main` will automatically build and publish to GitHub Pages.
+
+### Option 3: Deploy to Netlify / Cloudflare Pages
+- **Netlify**: Drag & drop this `Website` folder directly into [app.netlify.com/drop](https://app.netlify.com/drop).
+- **Cloudflare Pages**: Connect the Git repository and set the output directory to `Website`.
+
+---
+
+## 💻 Running Locally
+
+### Using Python HTTP Server:
 ```bash
-cd Website
+# From within the Website directory
 python -m http.server 8000
 ```
-Then visit `http://localhost:8000`.
+Open `http://localhost:8000` in your web browser.
+
+### Using VS Code:
+Right-click `index.html` and choose **Open with Live Server**.
 
 ---
 
-## Connecting to Your Live Firebase Backend
+## 🔌 Firebase Realtime Database Configuration
 
-1. Go to [Firebase Console](https://console.firebase.google.com) and create a free project.
-2. In the left menu, select **Build > Realtime Database > Create Database**.
-3. In **Rules**, set read/write rules to public (or secured via secret):
-   ```json
-   {
-     "rules": {
-       ".read": true,
-       ".write": true
-     }
-   }
-   ```
-4. Copy your Database URL (e.g. `https://your-project-id-default-rtdb.firebaseio.com/leaderboard`).
-5. In Unity:
-   - Enter this URL into `CloudLeaderboardService` (or in Inspector).
-6. On the Website:
-   - Click the **API Badge** at the bottom-right of the web page to paste your Firebase database URL (`https://your-project-id-default-rtdb.firebaseio.com/leaderboard.json`).
+The dashboard connects to Firebase via REST endpoint:
+- **Default Endpoint**: Configured in `app.js`:
+  ```javascript
+  const ENDPOINT = 'https://driftit-6dd08-default-rtdb.asia-southeast1.firebasedatabase.app/leaderboard.json';
+  ```
+- **Custom Backend**: To point to your own Firebase instance, update the `ENDPOINT` variable in `app.js` with your Firebase database URL (`https://<project-id>-default-rtdb.firebaseio.com/leaderboard.json`).
 
 ---
 
-## Free Hosting
-You can host this `Website/` folder completely for free with:
-- **GitHub Pages**: Push this repo and enable GitHub Pages on the `/Website` directory or branch.
-- **Vercel / Netlify**: Drag & drop the `Website` folder directly into Netlify / Vercel dashboard.
+## 📁 File Structure
 
+```
+Website/
+├── index.html        # Semantic HTML5 layout with sidebar & leaderboard table
+├── style.css         # Cyberpunk arcade theme, responsive flex/grid layouts
+├── app.js            # Realtime data fetching, normalization, search & stage inspector
+├── vercel.json       # Vercel deployment caching & clean URLs config
+├── fonts/            # Local arcade font assets
+└── sprites/          # UI badges and graphical assets
+```
