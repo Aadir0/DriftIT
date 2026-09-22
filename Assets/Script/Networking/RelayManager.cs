@@ -13,7 +13,11 @@ using UnityEngine;
 public class RelayManager : MonoBehaviour
 {
     [SerializeField] private float clientConnectionTimeout = 60f;
-    private const string relayProtocol = "dtls"; // dtls = encrypted UDP, recommended for Unity Relay
+#if UNITY_WEBGL && !UNITY_EDITOR
+    private const string relayProtocol = "wss"; // Secure WebSockets required for WebGL browsers
+#else
+    private const string relayProtocol = "wss"; // Using wss allows cross-play between WebGL and Desktop builds
+#endif
     private const int clientConnectionBufferTimeoutSeconds = 30;
 
     public static RelayManager Instance { get; private set; }
